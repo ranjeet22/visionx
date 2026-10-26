@@ -23,6 +23,7 @@ import { CameraViewfinder } from '../components/vision/CameraViewfinder';
 import { ImageUploadPanel } from '../components/vision/ImageUploadPanel';
 import { CapturedPreviewCard } from '../components/vision/CapturedPreviewCard';
 import { AnalysisResultPanel } from '../components/vision/AnalysisResultPanel';
+import { MarkdownContent } from '../components/ui/MarkdownContent';
 import './ScanPage.css';
 
 export const ScanPage: React.FC = () => {
@@ -615,13 +616,7 @@ export const ScanPage: React.FC = () => {
                           <span className="bubble-time">{msg.timestamp}</span>
                         </div>
                         <div className="bubble-text">
-                          {msg.text.split('\n').map((paragraph, pIdx) =>
-                            paragraph.trim() ? (
-                              <p key={pIdx} className="bubble-paragraph">
-                                {paragraph}
-                              </p>
-                            ) : null
-                          )}
+                          <MarkdownContent content={msg.text} />
                         </div>
 
                         {msg.sources && msg.sources.length > 0 && (

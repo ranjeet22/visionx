@@ -627,3 +627,113 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Markdown Formatted Content Styles */
+.markdown-body-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  line-height: 1.55;
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.markdown-h3 {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  color: var(--ink);
+}
+
+.markdown-h4 {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  color: var(--ink);
+}
+
+.markdown-p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.markdown-ul {
+  margin: 4px 0 6px 18px;
+  padding: 0;
+  list-style-type: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.markdown-ol {
+  margin: 4px 0 6px 18px;
+  padding: 0;
+  list-style-type: decimal;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.markdown-li {
+  font-size: 0.87rem;
+  line-height: 1.5;
+}
+
+.markdown-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  background-color: var(--grey-panel);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--ink);
+}
+
+.markdown-blockquote {
+  margin: 4px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--sun);
+  font-style: italic;
+  color: var(--grey-text);
+}
+
+.markdown-hr {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  margin: 8px 0;
+  width: 100%;
+}
+
+.markdown-pre {
+  background-color: var(--grey-panel);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 4px 0;
+}
+
+.markdown-code-block {
+  font-family: inherit;
+  font-size: inherit;
+  white-space: pre;
+}
+
+.markdown-link {
+  color: var(--sea);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-link:hover {
+  opacity: 0.8;
+}
