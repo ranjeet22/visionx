@@ -1,502 +1,235 @@
-<div align="center">
+# VisionX — Dual-Model Vision Pipeline & AI Environmental Assistant
 
-<img src="./public/visionx-banner.svg" alt="VisionX Banner" width="100%" />
-
----
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
-[![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript_6-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite_8-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![FastAPI](https://img.shields.io/badge/FastAPI_0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![YOLOv11](https://img.shields.io/badge/YOLO11n-00FFFF?style=for-the-badge&logo=ultralytics&logoColor=black)](https://github.com/ultralytics/ultralytics)
-[![PyTorch](https://img.shields.io/badge/PyTorch_2.0-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![Render](https://img.shields.io/badge/Deploy_on-Render-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://render.com)
-
-**VisionX** is a real-time computer vision and agentic artificial intelligence platform designed to eliminate municipal recycling contamination. By combining ultra-fast edge object detection (YOLO11n) with autonomous multi-tool conversational reasoning (AWS Strands Agents framework), VisionX bridges the gap between raw object detection and actionable environmental compliance.
-
-[Explore Architecture](#-system-architecture) • [Live Scanner](#-scanner--interactive-demonstrations) • [API Reference](#-rest-api-reference) • [Quickstart](#-local-development-setup) • [Waste Taxonomies](#-supported-waste-taxonomies)
-
-</div>
+VisionX is an enterprise-grade computer vision and conversational AI platform designed to eliminate municipal recycling contamination. It features a real-time **dual-model vision pipeline** (Ultralytics Person Detection + Roboflow Pretrained Waste Detection), an **object-aware Strands conversational agent**, and local on-device **speech-to-text transcription powered by Cactus Compute Whistle**.
 
 ---
 
-## 📑 Table of Contents
-
-- [🌟 Why VisionX?](#-why-visionx)
-- [⚖️ VisionX vs. Traditional Vision Classifiers](#️-visionx-vs-traditional-vision-classifiers)
-- [🧩 System Architecture](#-system-architecture)
-  - [1. End-to-End Inference Pipeline](#1-end-to-end-inference-pipeline)
-  - [2. Multi-Tool Agent Orchestration](#2-multi-tool-agent-orchestration)
-  - [3. Waste Sorting & Contamination Decision Tree](#3-waste-sorting--contamination-decision-tree)
-- [📸 Scanner & Interactive Demonstrations](#-scanner--interactive-demonstrations)
-- [🗂️ Supported Waste Taxonomies](#️-supported-waste-taxonomies)
-- [🔌 REST API Reference](#-rest-api-reference)
-- [🛠️ Tech Stack & Tooling](#️-tech-stack--tooling)
-- [⚙️ Environment Variables](#️-environment-variables)
-- [🚀 Local Development Setup](#-local-development-setup)
-- [☁️ Cloud Deployment (Render Blueprint)](#️-cloud-deployment-render-blueprint)
-- [📚 Scientific References & Citations](#-scientific-references--citations)
-- [📄 License](#-license)
-
----
-
-## 🌟 Why VisionX?
-
-Over **25% of municipal recyclables are diverted directly into landfills** due to aspirational recycling ("wishcycling") and cross-contamination (liquids soaking dry paper, grease on unwashed plastics, and flexible films tangling sorting conveyor belts).
-
-Traditional computer vision applications only answer: **"What object is this?"**
-VisionX answers: **"What is it, how should it be cleaned and prepped, which local bin does it belong in, and what happens if you dispose of it incorrectly?"**
-
-### Key Capabilities:
-
-- ⚡ **Sub-85ms Real-Time Inference:** Fine-tuned YOLO11n weights with class-agnostic Non-Maximum Suppression (NMS) and containment deduplication.
-- 🎯 **Tactile Retro Neo-Brutalist Interface:** Bold outlines, hard offset ink shadows, zero blurred glassmorphism, and responsive physical button physics.
-- 📹 **Dual-Mode Scanner (`/scan`):** Zero-latency HTML5 canvas freeze-frame webcam streaming with front/rear camera switching, plus drag-and-drop photo upload.
-- 🛡️ **Responsible Uncertainty Flagging:** Avoids reckless overconfidence by differentiating visually verified materials from unverified polymers (e.g. labeling clear plastic bottles as *"Likely PET #1 (Unverified Polymer)"*).
-- 🤖 **Agentic Multi-Tool Assistance:** Integrated slide-over drawer powered by the AWS Strands Agents framework and LLM backends (xAI Grok / Groq Llama 3.3) equipped with 4 deterministic domain tools.
-
----
-
-## ⚖️ VisionX vs. Traditional Vision Classifiers
-
-| Feature | Generic Image Classifier | VisionX Waste Intelligence | Impact |
-| :--- | :--- | :--- | :--- |
-| **Output Type** | Raw string (e.g. `"bottle"`) | Full structured material profile + disposal routing | Direct user actionability |
-| **Preparation Steps** | ❌ None | ✅ Itemized checklist (Rinse, Cap retention, Flatten) | Prevents compactor contamination |
-| **Contamination Alerts** | ❌ None | ✅ Critical hazard warnings (grease, liquids, lithium) | Protects MRF equipment & paper bales |
-| **Duplicate Filtering** | Basic IoU (frequently produces ghost boxes) | Custom maximum IoU + Box Containment Deduplication | Clean, single-winner object cards |
-| **Material Verification** | False certainty (assumes 100% recyclable) | Explicit `material_verified: false` for unverified resins | Prevents wishcycling |
-| **Follow-up Interaction** | Static non-interactive cards | Contextual conversational agent with clickable prompt chips | Instant user clarification |
-
----
-
-## 🧩 System Architecture
-
-VisionX couples a client-side React 19 application with a high-throughput FastAPI inference server and an autonomous agent reasoning layer.
-
-### 1. End-to-End Inference Pipeline
+## 🏗️ System Architecture
 
 ```mermaid
----
-config:
-  layout: elk
-  theme: base
----
-flowchart LR
- subgraph Client["Client Layer (React 19 + TypeScript)"]
-        B["HTML5 Canvas Capture & Client Validation"]
-        A["User Input: Webcam Stream or File Dropzone"]
-        C["Normalized Multipart Request"]
-  end
- subgraph Backend["FastAPI Gateway (backend/server.py)"]
-        D["Image Decoding & RGB Transformation"]
-        E["YOLO11n Inference Engine - weights/best.pt"]
-        F["Class-Agnostic NMS - IoU 0.35"]
-        G["Containment & IoU Deduplication Algorithm"]
-        H["Coordinate Normalization 0..1 Box Mapping"]
-        I["Waste Knowledge Engine - waste_knowledge.py"]
-  end
- subgraph AgenticLayer["Reasoning Layer (backend/agent/strands_agent.py)"]
-        J["Enriched Detection Payload"]
-        K["AWS Strands Agent Context Registry"]
-        L["Multi-Tool Agent Orchestrator"]
-        M["Structured JSON Response Generator"]
-  end
- subgraph Display["Interactive UI (ScanPage.tsx)"]
-        N["Bounding Box Overlays + Preparation Cards"]
-        O["Dynamic Chat Assistant Drawer + Action Chips"]
-  end
-    A --> B
-    B --> C
-    C --> D
-    D --> E
-    E --> F
-    F --> G
-    G --> H
-    H --> I
-    I --> J
-    J --> K
-    K --> L
-    L --> M
-    M --> N
-    N --> O
-```
-
----
-
-### 2. Multi-Tool Agent Orchestration
-
-When users ask questions about detected objects, the **Strands Agent** leverages 4 specialized deterministic tools rather than hallucinating answers:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User / Scanner
-    participant UI as VisionX UI (ScanPage)
-    participant API as FastAPI (/api/visionx/chat)
-    participant Agent as Strands Agent Orchestrator
-    participant Tools as Domain Knowledge Tools
-    participant LLM as LLM Backend (Grok / Groq)
-
-    User->>UI: Types question or clicks suggestion chip
-    UI->>API: POST /api/visionx/chat (session_id, question, active_bbox)
-    API->>Agent: execute_agent_chat()
-    Agent->>Tools: get_detection_context(session_id, object_id)
-    Tools-->>Agent: Bounding box, confidence (0.94), model_class
-    Agent->>Tools: get_waste_guidance(item_or_category)
-    Tools-->>Agent: Preparation steps, bin category, contamination risk
-    opt Hazard Detected (Battery, Broken Glass, Solvents)
-        Agent->>Tools: search_material_safety(material_name)
-        Tools-->>Agent: Safety handling instructions & fire hazard warnings
-    end
-    Agent->>LLM: Prompt + Verified Tool Payloads + System Guardrails
-    LLM-->>Agent: Structured JSON {answer, suggested_questions, sources}
-    Agent-->>API: Validated AgentChatResponse schema
-    API-->>UI: 200 OK (answer markdown + chips + citations)
-    UI-->>User: Renders formatted response + 3 new dynamic prompt chips
-```
-
----
-
-### 3. Waste Sorting & Contamination Decision Tree
-
-```mermaid
----
-config:
-  theme: default
----
 flowchart TD
-    Start([Visual Object Detected]) --> TypeCheck{Identify Primary Material}
-
-    TypeCheck -->|Organic Biomass| OrganicPath[Compost / Green Organics Bin]
-    OrganicPath --> OrgPrep[Remove PLU Stickers and Plastic Liners]
-
-    TypeCheck -->|Rigid Packaging| RigidCheck{Identify Material}
-    RigidCheck -->|Aluminium / Steel| MetalPath[Metal Recycling Bin]
-    RigidCheck -->|Container Glass| GlassPath[Dedicated Glass Recycling Bin]
-    RigidCheck -->|PET #1 / HDPE #2| PlasticPrep[Empty and Rinse if Required]
-    PlasticPrep --> BlueBin[Curbside Blue Bin if Accepted]
-
-    TypeCheck -->|Flexible Film / Bag| FilmCheck{Scrunch Test}
-    FilmCheck -->|Stays Crumpled| DropOff[Soft Plastic Drop-Off if Accepted]
-    FilmCheck -->|Mixed Foil or Not Accepted| TrashPath[Residual Waste Bin]
-
-    TypeCheck -->|E-Waste / Battery| HazardAlert[Battery Fire Hazard]
-    HazardAlert --> BatteryTape[Follow Battery Safety Guidance]
-    BatteryTape --> EWasteDrop[Certified E-Waste / Battery Drop-Off]
-
-    TypeCheck -->|Food-Soiled Takeout / Foam #6| SoiledCheck{Accepted Locally?}
-    SoiledCheck -->|No| TrashPath
-    SoiledCheck -->|Yes| BlueBin
+    UI["Frontend (React 19 + TypeScript + Vite)"] -->|"Image Still (Camera or Upload)"| API["FastAPI Backend (/api/detect)"]
+    API --> PIPELINE["Dual-Model Detection Pipeline"]
+    
+    subgraph Vision Pipeline
+        PIPELINE -->|"COCO Class 0 (Person)"| MODEL_A["Model A: Ultralytics (yolov8n)"]
+        PIPELINE -->|"Pretrained Waste Classes"| MODEL_B["Model B: Roboflow Universe Hosted"]
+        MODEL_A -->|"Person Detections (Non-Waste)"| MERGE["Normalization & Deduplication"]
+        MODEL_B -->|"Waste Detections"| MERGE
+        MERGE -->|"Enrich with Verified Guidance"| KB["Knowledge Base Engine"]
+    end
+    
+    KB -->|"Combined Standard Schema"| UI
+    
+    subgraph Conversational & Voice Assistant
+        UI -->|"Microphone Speech Clip"| STT_API["FastAPI /api/transcribe"]
+        STT_API -->|"16kHz Mono WAV"| WHISTLE["Cactus Compute Whistle (needle)"]
+        WHISTLE -->|"Transcript text into chat input"| UI
+        UI -->|"User-reviewed question + Detection Context"| CHAT_API["FastAPI /api/visionx/chat"]
+        CHAT_API --> AGENT["Strands Agents Framework"]
+        AGENT -->|"Tools: Waste, Safety, Detection, Local"| GROK["Grok / Groq LLM"]
+        AGENT -->|"Fallback on offline"| LOCAL_KB["Verified Local Knowledge Base"]
+    end
 ```
 
 ---
 
-## 📸 Scanner & Interactive Demonstrations
+## 📋 Prerequisites
 
-VisionX provides two operational modalities:
-
-### 1. Dedicated Live Camera Scanner (`/scan`)
-- **Webcam Interface:** Accessible on mobile or desktop via standard WebRTC streams.
-- **Orientation Toggle:** Quick front/rear camera flip with mirrored selfie compensation.
-- **Bounding Box Reticles:** Instant visual positioning of detected objects with high-contrast badge borders and confidence percentages.
-- **Dynamic Assistant Drawer:** Slide-over assistant panel pre-loaded with context-aware prompt chips like:
-  - *"Should I leave the plastic cap on or throw it away?"*
-  - *"Why does VisionX mark this as unverified polymer?"*
-  - *"What happens if this container is greasy?"*
-
-### 2. Pre-Configured Benchmark Scenarios (Landing Page)
-Three built-in environmental benchmarks illustrate edge-case handling:
-1. **Plastic Beverage Bottle:** Highlights contamination hazards from residual liquids and explores modern MRF cap retention policies.
-2. **Banana Peel:** Explains methane generation in anaerobic landfill environments and emphasizes removal of non-compostable PLU stickers.
-3. **Takeout Container:** Demonstrates unverified polymer handling, resin stamp inspection (#1-#6), and the impact of grease contamination.
+- **Python:** 3.11 or 3.12 (Python 3.12 recommended)
+- **Node.js:** v18+ or v20+
+- **Package Managers:**
+  - **uv** (ultra-fast Python package and project manager)
+  - **npm** (Node package manager)
+- **Git**
 
 ---
 
-## 🗂️ Supported Waste Taxonomies
+## 🐍 Python Environment Setup with `uv`
 
-The VisionX core engine detects 10 primary municipal superclasses, mapped onto 60 TACO (Trash Annotations in Context) categories:
+VisionX strictly uses **uv** for Python virtual environment management and dependency installations.
 
-| YOLO Class | Display Name | Material Composition | Primary Disposal Bin | Material Verified? | Critical Contamination Warning |
-| :--- | :--- | :--- | :--- | :---: | :--- |
-| `PlasticBottle` | Plastic Beverage Bottle | PET (#1) | 🔵 Curbside Recyclables | ⚠️ False (Unverified) | Liquids leak onto dry paper bales during collection compactor transit. |
-| `PlasticWrapper` | Flexible Film & Bag | LDPE (#4) / PP Film | 🏪 Supermarket Drop-Off | ⚠️ False (Unverified) | **Major sorting hazard:** Wraps around MRF disc screens and jams axles. |
-| `PaperCardboard` | Paper & Cardboard Box | Cellulose Fiber | 🔵 Clean Paper Bin | ✅ True | Greasy pizza oil permanently destroys paper pulp slurry batches. |
-| `MetalWaste` | Metal Can & Container | Aluminium / Tin Steel | 🔵 Dry Recyclables | ✅ True | Pressurized aerosol containers must be completely empty before disposal. |
-| `GlassWaste` | Glass Bottle & Jar | Soda-Lime Glass | 🟢 Dedicated Glass Bin | ✅ True | Never mix with Pyrex or drinking cups; ceramic glass ruins melted cullet batches. |
-| `DisposableContainer` | Takeout Food Box | Polystyrene (#6) / Mixed | ⚫ Residual / Landfill | ⚠️ False (Conditional) | Food grease cannot be separated from plastics during mechanical recycling. |
-| `Clothing` | Textile & Fabric | Cotton / Polyester Blend | 👕 Charity / Textile Bank | ⚠️ False (Unverified) | **Textile tangler:** Wraps tightly around MRF conveyor belts and motor spindles. |
-| `OrganicWaste` | Biomass & Food Waste | Biodegradable Organics | 🟤 Compost / Organics Bin | ✅ True | Plastic produce PLU stickers and synthetic bags ruin municipal compost. |
-| `EWaste` | Electronic & Battery | Circuitry / Lithium-ion | 🔴 Authorized E-Waste Depot | ⚠️ False (Unverified) | **Critical fire hazard:** Crushed lithium-ion cells cause explosive compactor truck fires. |
-| `Other` | Mixed Litter / Unknown | Composite Material | ⚫ Residual Waste | ⚠️ False (Uncertain) | Do not "wishcycle" unknown composites; visual inspection required. |
+### 1. Create the Virtual Environment
 
----
-
-## 🔌 REST API Reference
-
-The VisionX FastAPI server operates on port `8000` by default.
-
-### Endpoint Overview
-
-| Method | Endpoint | Description | Request Type | Response Format |
-| :---: | :--- | :--- | :---: | :---: |
-| `GET` | `/api/health` | Health check, device status (CUDA/CPU), loaded model | N/A | `application/json` |
-| `GET` | `/api/knowledge-base` | Complete municipal waste knowledge base | N/A | `application/json` |
-| `POST` | `/api/detect` | Runs YOLO inference + containment deduplication | `multipart/form-data` | `application/json` |
-| `POST` | `/api/visionx/chat` | Contextual multi-tool Strands Agent conversational Q&A | `application/json` | `application/json` |
-
----
-
-<details>
-<summary><b>🔍 Expand: Detailed API Payloads and Sample Responses</b></summary>
-
-### 1. `POST /api/detect`
-**Query Parameters:**
-- `conf` *(float, optional, default: 0.18)*: Minimum detection confidence threshold (range `0.05` - `1.0`).
-
-**Request Payload:**
-```http
-POST /api/detect?conf=0.20 HTTP/1.1
-Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
-
-------WebKitFormBoundary
-Content-Disposition: form-data; name="file"; filename="sample_bottle.jpg"
-Content-Type: image/jpeg
-
-<binary image content>
-------WebKitFormBoundary--
+```bash
+uv venv --python 3.12 .venv
 ```
 
-**Response Payload (`200 OK`):**
-```json
-{
-  "success": true,
-  "inference_time_ms": 68.4,
-  "image_width": 1920,
-  "image_height": 1080,
-  "confidence_threshold": 0.2,
-  "detections_count": 1,
-  "detections": [
-    {
-      "id": "det-1",
-      "model_class_name": "PlasticBottle",
-      "display_name": "Plastic Beverage Bottle",
-      "confidence": 0.942,
-      "box": {
-        "x": 0.224,
-        "y": 0.151,
-        "width": 0.452,
-        "height": 0.689
-      },
-      "waste_category": "recyclable",
-      "material": "Polyethylene Terephthalate (PET #1)",
-      "material_verified": false,
-      "disposal_method": "Recycle in curbside plastic recycling bin",
-      "preparation_steps": [
-        "Empty all liquid contents completely into a sink",
-        "Give a quick rinse with clean water to remove sticky residues",
-        "Crush the bottle flat to conserve collection and bin space",
-        "Screw the plastic cap back on tightly before placing in the bin"
-      ],
-      "contamination_warning": "Leftover sugary liquids leak during compression in collection trucks, contaminating dry paper bundles.",
-      "reusability": "Can be repurposed for storage or refilled if food-grade.",
-      "environmental_impact": "Recycling 1 ton of PET plastic saves approx 3.8 barrels of crude oil."
-    }
-  ]
-}
+### 2. Activate Virtual Environment
+
+- **Windows (PowerShell):**
+  ```powershell
+  .venv\Scripts\Activate.ps1
+  ```
+- **Windows (Command Prompt):**
+  ```cmd
+  .venv\Scripts\activate.bat
+  ```
+- **Linux / macOS:**
+  ```bash
+  source .venv/bin/activate
+  ```
+
+### 3. Install Backend Dependencies
+
+Maintain one authoritative `requirements.txt`. Install all dependencies from the file:
+
+```bash
+uv pip install -r requirements.txt
 ```
 
 ---
 
-### 2. `POST /api/visionx/chat`
-**Request Payload:**
-```json
-{
-  "session_id": "session-live-001",
-  "user_question": "Can I leave the plastic cap on this bottle?",
-  "selected_object": {
-    "display_name": "Plastic Beverage Bottle",
-    "waste_category": "recyclable",
-    "material": "Polyethylene Terephthalate (PET #1)"
-  },
-  "history": [],
-  "locality": "General Municipal"
-}
-```
+## ⚙️ Environment Variables Configuration
 
-**Response Payload (`200 OK`):**
-```json
-{
-  "success": true,
-  "answer": "Yes! In most modern municipal recovery facilities (MRFs), leaving the cap **firmly screwed on** the bottle is the standard recommendation. It prevents small caps from slipping through sorting screens into landfill crushers.",
-  "suggested_questions": [
-    "Does this bottle need to be completely dry?",
-    "What should I do with the paper label?",
-    "Where is the nearest soft plastic drop-off?"
-  ],
-  "sources": [
-    "Association of Plastic Recyclers (APR) Design Guide",
-    "EPA Municipal Solid Waste Protocol"
-  ],
-  "needs_clarification": false,
-  "uncertainty_note": null
-}
-```
-
-</details>
-
----
-
-## 🛠️ Tech Stack & Tooling
-
-```
-VisionX
-├── Frontend  ──────  React 19 + TypeScript + Vite 8 + Lucide Icons
-├── Backend   ──────  FastAPI + Uvicorn + Python 3.11 + Pydantic v2
-├── Vision ML ──────  YOLO11n + Ultralytics + PyTorch (CPU/CUDA) + Pillow
-├── Agent AI  ──────  AWS Strands Agents SDK + xAI Grok / Groq Llama 3.3
-└── Deploy    ──────  Render Cloud Blueprint (IaC) + Global CDN Static Host
-```
-
-| Layer | Technology | Version | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Frontend Framework** | React | `^19.2.8` | High-performance reactive UI and virtual DOM |
-| **Language (Web)** | TypeScript | `~6.0.2` | Strict end-to-end type safety |
-| **Build Tool** | Vite | `^8.3.0` | Sub-second HMR and optimized production bundles |
-| **Icons & Design** | Lucide React | `^1.54.0` | Minimalist tactile icons |
-| **Linter** | Oxlint | `^1.81.0` | Next-generation Rust-based code linter |
-| **Backend Framework** | FastAPI | `^0.115.0` | High-throughput asynchronous ASGI web server |
-| **Computer Vision** | Ultralytics / YOLO | `^8.3.0` | Real-time object detection model serving |
-| **Deep Learning** | PyTorch | `^2.0.0` | Tensor computation on CPU and CUDA GPUs |
-| **Image Processing** | Pillow (PIL) | `^10.0.0` | In-memory RGB conversion & coordinate mapping |
-| **Agent Framework** | Strands Agents | `^1.59.0` | Autonomous tool-calling and context orchestration |
-| **LLM Inference** | Grok / Groq | API | Grounded conversational reasoning |
-
----
-
-## ⚙️ Environment Variables
-
-Create a `.env` file in the project root by copying `.env.example`:
+Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-| Variable | Required? | Default | Description |
-| :--- | :---: | :--- | :--- |
-| `GROK_API` | Optional* | None | API key for Grok (xAI) or Groq Llama-3.3 LLM agent. Starts with `xai-` or `gsk_`. |
-| `VITE_API_URL` | Optional | `http://127.0.0.1:8000` | Points the frontend to the backend REST API endpoint. |
-| `PYTHON_VERSION` | Optional | `3.11.9` | Pinned Python runtime for cloud deployment. |
+Edit `.env` with your API credentials:
 
-*\*Note: If no LLM key is configured, the agent safely falls back to internal deterministic knowledge base retrieval without breaking.*
+```dotenv
+# LLM API key for the post-detection Strands conversational agent
+GROK_API=your_grok_or_groq_api_key_here
+
+# Roboflow Pretrained Waste Detection Model Configuration
+# Project: https://universe.roboflow.com/ting-ting-s-workspace/yolo-waste-detection-28enj
+ROBOFLOW_API_KEY=your_roboflow_api_key_here
+ROBOFLOW_WORKSPACE=ting-ting-s-workspace
+ROBOFLOW_PROJECT=yolo-waste-detection-28enj
+ROBOFLOW_VERSION=1
+
+# Ultralytics Pretrained Person Detection Model (COCO)
+ULTRALYTICS_MODEL=yolov8n.pt
+
+# Optional: Force device (cpu or cuda)
+VISIONX_DEVICE=cpu
+```
+
+> [!IMPORTANT]
+> Never commit `.env` or credentials to version control. The `.gitignore` file is pre-configured to prevent secrets from being tracked.
 
 ---
 
-## 🚀 Local Development Setup
+## 💻 Frontend Setup
 
-### Prerequisites
-- **Node.js** `>= 18.0.0`
-- **Python** `>= 3.10`
-- **Git**
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/ITS-LLM-2026/VisionX.git
-cd VisionX
-```
-
-### 2. Frontend Setup
 ```bash
 # Install frontend dependencies
-npm install
+npm ci
 
-# Start Vite development server
+# Run development server
 npm run dev
-```
-Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
-### 3. Backend Setup
-In a separate terminal window:
-```bash
-# Optional: Create and activate a virtual environment
-python -m venv venv
+# Run frontend linting
+npm run lint
 
-# Windows:
-venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
-
-# Install optimized backend dependencies
-pip install -r requirements.txt
-
-# Start the FastAPI server
-python backend/server.py
-```
-The API server will run at **[http://127.0.0.1:8000](http://127.0.0.1:8000)**. Interactive Swagger docs are available at **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**.
-
-### 4. Running Automated Tests
-```bash
-python backend/test_api_integration.py
+# Build production bundle
+npm run build
 ```
 
-<details>
-<summary><b>🧪 Expected Test Suite Output</b></summary>
-
-```text
-=== Running VisionX API Integration Tests ===
-[1/4] Testing GET /api/health ...
-      -> Health check passed! Supported classes: 10
-[2/4] Testing GET /api/knowledge-base ...
-      -> Knowledge base endpoint passed! Classes count: 10
-[3/4] Testing POST /api/detect with valid image ...
-      -> Detection endpoint passed! Inference time: 54.12ms, Detections: 1
-[4/4] Testing POST /api/detect with invalid file ...
-      -> Rejected invalid file as expected (400 Bad Request)
-=== ALL INTEGRATION TESTS PASSED SUCCESSFULLY! ===
-```
-
-</details>
+The frontend development server runs on `http://localhost:5173`.
 
 ---
 
-## ☁️ Cloud Deployment (Render Blueprint)
+## 🚀 Backend Execution
 
-VisionX includes an automated Infrastructure-as-Code deployment manifest (`render.yaml`).
+Run the FastAPI backend using `uv run` or your activated virtual environment:
 
-### Deploy via Render Blueprint:
-1. Fork or push this repository to GitHub.
-2. Sign in to [Render](https://render.com).
-3. Navigate to **Blueprints** and click **New Blueprint Instance**.
-4. Select your `VisionX` repository.
-5. Render will automatically provision two services:
-   - **`visionx-api`**: Python 3.11 Web Service running the FastAPI inference backend.
-   - **`visionx`**: Static Site hosting the React 19 SPA with single-page URL rewrites.
-6. Set the `GROK_API` environment variable under `visionx-api` settings if conversational agent reasoning is required.
+```bash
+uv run python backend/server.py
+```
+
+The server initializes on `http://127.0.0.1:8000`. You can inspect the Swagger documentation at `http://127.0.0.1:8000/docs`.
 
 ---
 
-## 📚 Scientific References & Citations
+## 🤖 Dual-Model Vision Pipeline
 
-VisionX's taxonomy and contamination protocols are built on verified open research:
+VisionX combines two specialized models on every uploaded photo or camera frame:
 
-1. **TACO Dataset:**  
-   Proença, P. F., & Simões, P. (2020). *TACO: Trash Annotations in Context for Litter Detection*. [arXiv:2003.06975](https://arxiv.org/abs/2003.06975).
-2. **EPA Municipal Solid Waste Guidelines:**  
-   United States Environmental Protection Agency. *Advancing Sustainable Materials Management: Fact Sheet & Recycling Measurement*. [EPA.gov](https://www.epa.gov/recycle).
-3. **Association of Plastic Recyclers (APR):**  
-   *The APR Design® Guide for Plastics Recyclability*. [PlasticsRecycling.org](https://plasticsrecycling.org).
-4. **AWS Strands Agents SDK:**  
-   Open-source autonomous Python agent framework for multi-tool execution and structured LLM outputs.
+### Model A: Ultralytics Person Detection
+- Uses official Ultralytics API (`yolov8n.pt` by default, configurable).
+- Detects **people only** (COCO class ID `0`).
+- Strictly discards non-person classes from this model so bottles, chairs, or cars are never reported as waste by Model A.
+- Sets category to `null` / `non_waste`, display label to `Person`, and returns clear non-waste explanation:
+  *"Person detected. This is not a waste item, so waste disposal guidance does not apply."*
+- Bounding boxes are normalized `[0..1]`.
+
+### Model B: Roboflow Pretrained Waste Detection
+- Integrates the project: [ting-ting-s-workspace/yolo-waste-detection-28enj](https://universe.roboflow.com/ting-ting-s-workspace/yolo-waste-detection-28enj).
+- Uses hosted REST inference (`https://detect.roboflow.com/{ROBOFLOW_PROJECT}/{ROBOFLOW_VERSION}`) or `inference-sdk`.
+- Securely reads `ROBOFLOW_API_KEY` from backend environment variables.
+- Detects municipal waste classes (plastic bottles, cardboard, aluminium cans, glass, organics, etc.).
+
+### Overlapping Bounding Boxes & Non-Suppression
+- A person holding a plastic bottle will trigger detections from **both** models.
+- The pipeline **never** merges or suppresses person detections against waste detections. Both are preserved, assigned unique IDs (`person-1`, `waste-plastic_bottle-1`), and displayed simultaneously.
+
+### Partial Model Failures
+The system explicitly tracks per-model status and handles partial failures:
+- **`all_succeeded`**: Both models executed successfully.
+- **`partial_success`**: One model succeeded (e.g. Person detector succeeded while Roboflow returned an authentication error or timeout). Results from the working model are returned along with the error reason for the failed model.
+- **`all_failed`**: Both models failed to execute.
+- **`no_objects_detected`**: Both models ran successfully but detected no objects above the threshold.
+
+---
+
+## 🎙️ Speech-to-Text Transcription (Cactus Compute Whistle)
+
+VisionX integrates the **Whistle** automatic speech recognition (ASR) model developed by Cactus Compute via the `cactus-needle` SDK:
+- **Model weights:** Lightweight ~16.9 MB model automatically cached upon first use.
+- **Supported audio processing:** PyAV decodes arbitrary audio formats (WebM/Opus, Ogg, WAV, MP4) into 16 kHz mono 16-bit PCM WAV.
+- **User workflow in Ask AI:**
+  1. Click the microphone button in the chat drawer.
+  2. Speak your question.
+  3. Click Stop. The audio tracks are immediately released.
+  4. Whistle transcribes the clip on the backend.
+  5. The transcript appears in the chat text input, allowing the user to review or edit before sending.
+
+---
+
+## 💬 Object-Aware Strands Chatbot
+
+The conversational assistant utilizes the **Strands Agents SDK** with compatible model providers:
+- **Context Grounding:** The assistant receives the selected detection's label, model source, confidence, bounding box, material, and verification status, alongside all other detections in the same frame.
+- **Special Non-Waste Guardrail:** When a `Person` detection is selected, the agent explains that a person was detected, affirms that waste disposal does not apply, and redirects questions to waste items in the image.
+- **Deterministic Tools:** `get_detection_context`, `get_waste_guidance`, `search_material_safety`, `get_local_disposal_guidance`.
+- **Verified Local Fallback:** If cloud LLM credentials are not configured or external APIs fail, the assistant provides a structured, verified fallback from the local knowledge base, transparently indicating that local knowledge was used.
+
+---
+
+## 🧪 Testing and Verification
+
+Run the comprehensive pytest suite:
+
+```bash
+uv run pytest backend/tests -v
+```
+
+### Test Coverage Summary:
+- **`backend/tests/test_knowledge.py`:** Tests known waste classes, delimiter/case normalization, person non-waste handling, and cautious unknown class resolution.
+- **`backend/tests/test_detection.py`:** Tests person-only, waste-only, overlapping person & waste, multiple waste deduplication, no objects, and partial model failures.
+- **`backend/tests/test_chat.py`:** Tests selected waste item questions, person detection questions, empty questions, unknown classes, and verified offline fallback.
+- **`backend/tests/test_transcription.py`:** Tests valid audio transcription, empty audio, oversized audio rejection (>10MB), and corrupted audio streams.
+- **`backend/tests/test_api_endpoints.py`:** Tests all 5 FastAPI REST endpoints (`/api/health`, `/api/knowledge-base`, `/api/detect`, `/api/visionx/chat`, `/api/transcribe`).
+
+---
+
+## ⚠️ Common Setup and Runtime Troubleshooting
+
+1. **Roboflow Authentication Error (HTTP 401/403):**
+   - Ensure `ROBOFLOW_API_KEY` is defined in `.env`.
+   - If no key is available, the person detection model still operates and the frontend displays a clear status notice.
+2. **Microphone Access Blocked:**
+   - Browsers require HTTPS or `localhost` to access `navigator.mediaDevices.getUserMedia`.
+   - Ensure microphone permissions are granted in the browser settings.
+3. **PyTorch / Ultralytics CPU Acceleration:**
+   - By default, `VISIONX_DEVICE=cpu` runs inference across standard CPUs without requiring an NVIDIA GPU.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for full details.
-
----
-
-<div align="center">
-  <sub>Built with ❤️ by the VisionX Open Source Team. Let's make zero-contamination recycling a reality.</sub>
-</div>
+MIT License. Developed for intelligent environmental stewardship and municipal contamination prevention.

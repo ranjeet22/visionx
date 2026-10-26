@@ -523,3 +523,107 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Drawer Voice Recording & Error Styles */
+.drawer-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--paper);
+  border-top: var(--border);
+}
+
+.voice-error-tooltip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid #fca5a5;
+}
+
+.voice-err-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #b91c1c;
+}
+
+.voice-recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #fef3c7;
+  color: #92400e;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid #fde68a;
+}
+
+.recording-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #dc2626;
+  animation: recPulse 1s infinite alternate;
+}
+
+@keyframes recPulse {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  100% { transform: scale(1.3); opacity: 1; }
+}
+
+.voice-transcribing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #e0e7ff;
+  color: #3730a3;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid #c7d2fe;
+}
+
+.drawer-mic-btn {
+  background-color: var(--grey-panel);
+  border: var(--border-sm);
+  border-radius: var(--radius-sm);
+  padding: 0 14px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  transition: all 100ms ease;
+}
+
+.drawer-mic-btn:hover:not(:disabled) {
+  background-color: var(--sun);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.drawer-mic-btn.recording {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: var(--ink);
+  animation: micGlow 1.2s infinite alternate;
+}
+
+@keyframes micGlow {
+  0% { box-shadow: 2px 2px 0 var(--ink), 0 0 4px #ef4444; }
+  100% { box-shadow: 2px 2px 0 var(--ink), 0 0 12px #dc2626; }
+}
+
+.drawer-mic-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

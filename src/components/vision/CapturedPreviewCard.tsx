@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, RefreshCw, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Sparkles, RefreshCw, AlertCircle, ShieldAlert, User } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import type { ScannerInputMode, DetectedWasteObject } from '../../types';
@@ -65,15 +65,22 @@ export const CapturedPreviewCard: React.FC<CapturedPreviewCardProps> = ({
           <div className="corner-bracket bracket-br" />
         </div>
 
-        {/* Real Bounding Boxes Rendered from YOLO Model (Max Confidence per Object) */}
+        {/* Real Bounding Boxes Rendered from Dual Models (Ultralytics Person + Roboflow Waste) */}
         {hasAnalyzed &&
           detections.map((det) => {
             const isSelected = selectedObjectId === det.id;
+            const isPerson =
+              det.model_source === 'ultralytics_person' ||
+              det.model_class_name === 'person' ||
+              det.waste_category === 'non_waste' ||
+              det.waste_category === null;
+            const catClass = isPerson ? 'person' : `cat-${det.waste_category || 'uncertain'}`;
+
             return (
               <button
                 key={det.id}
                 type="button"
-                className={`detection-bounding-box ${isSelected ? 'selected' : ''} cat-${det.waste_category}`}
+                className={`detection-bounding-box ${isSelected ? 'selected' : ''} ${catClass}`}
                 style={{
                   left: `${det.box.x * 100}%`,
                   top: `${det.box.y * 100}%`,
@@ -92,7 +99,7 @@ export const CapturedPreviewCard: React.FC<CapturedPreviewCardProps> = ({
           })}
       </div>
 
-      {/* Multi-Object Selection Chips / Cards (Prompt 3 & Issue 2: Max Confidence) */}
+      {/* Multi-Object Selection Chips / Cards */}
       {hasAnalyzed && detections.length > 0 && (
         <div className="detections-selection-container">
           <div className="detections-header-row">
@@ -101,29 +108,42 @@ export const CapturedPreviewCard: React.FC<CapturedPreviewCardProps> = ({
               <span>DETECTED OBJECTS ({detections.length})</span>
             </div>
             <span className="detections-hint-text">
-              Click an object or bounding box to inspect disposal details
+              Click an object or bounding box to inspect details
             </span>
           </div>
 
           <div className="detection-chips-grid">
             {detections.map((det) => {
               const isSelected = selectedObjectId === det.id;
+              const isPerson =
+                det.model_source === 'ultralytics_person' ||
+                det.model_class_name === 'person' ||
+                det.waste_category === 'non_waste' ||
+                det.waste_category === null;
+              const chipClass = isPerson ? 'chip-person' : `chip-${det.waste_category || 'uncertain'}`;
+              const tagClass = isPerson ? 'tag-person' : `tag-${det.waste_category || 'uncertain'}`;
+              const tagLabel = isPerson ? 'PERSON · NON-WASTE' : (det.waste_category ? det.waste_category.toUpperCase() : 'UNCERTAIN');
+
               return (
                 <button
                   key={det.id}
                   type="button"
-                  className={`detection-chip-card ${isSelected ? 'active' : ''} chip-${det.waste_category}`}
+                  className={`detection-chip-card ${isSelected ? 'active' : ''} ${chipClass}`}
                   onClick={() => onSelectObject(det.id)}
                 >
                   <div className="chip-indicator" />
                   <div className="chip-details">
-                    <span className="chip-name">{det.display_name}</span>
+                    <span className="chip-name">
+                      {isPerson && <User size={13} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />}
+                      {det.display_name}
+                    </span>
                     <span className="chip-conf">
                       {Math.round(det.confidence * 100)}% CONFIDENCE
+                      {det.model_source && ` · ${det.model_source === 'ultralytics_person' ? 'ULTRALYTICS' : 'ROBOFLOW'}`}
                     </span>
                   </div>
-                  <span className={`chip-category-tag tag-${det.waste_category}`}>
-                    {det.waste_category}
+                  <span className={`chip-category-tag ${tagClass}`}>
+                    {tagLabel}
                   </span>
                 </button>
               );
@@ -148,11 +168,11 @@ export const CapturedPreviewCard: React.FC<CapturedPreviewCardProps> = ({
         <div className="backend-error-banner">
           <div className="error-title-row">
             <ShieldAlert size={18} strokeWidth={2.5} />
-            <span>Detection Backend Unavailable</span>
+            <span>Detection Backend Notice</span>
           </div>
           <p className="error-desc-text">{errorMessage}</p>
           <div>
-            <span className="error-code-tip">Terminal: python backend/server.py</span>
+            <span className="error-code-tip">Backend service: http://127.0.0.1:8000</span>
           </div>
         </div>
       )}
@@ -167,7 +187,7 @@ export const CapturedPreviewCard: React.FC<CapturedPreviewCardProps> = ({
           icon={<Sparkles size={18} strokeWidth={2.5} />}
           className="btn-analyze-waste"
         >
-          {isAnalyzing ? 'Running YOLO Inference...' : hasAnalyzed ? 'Re-run Detection' : 'Run Waste Detection'}
+          {isAnalyzing ? 'Running Dual-Model Vision...' : hasAnalyzed ? 'Re-run Detection' : 'Run Detection'}
         </Button>
 
         <Button

@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { ScanLine, ArrowLeft, Sparkles, X, Send } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  ScanLine,
+  ArrowLeft,
+  Sparkles,
+  X,
+  Send,
+  Mic,
+  Square,
+  RefreshCw,
+  AlertCircle,
+} from 'lucide-react';
 import { useRouter } from '../lib/useRouter';
 import { useCamera } from '../hooks/useCamera';
 import { YoloDetectionService } from '../features/detection/detection.service';
 import { StrandsAgentService } from '../features/assistant/assistant.service';
+import { TranscriptionService } from '../features/assistant/transcription.service';
 import { getTimestamp, generateId } from '../lib/utils';
 import type { ScannerInputMode, DetectedWasteObject, AssistantResponse } from '../types';
 import { Badge } from '../components/ui/Badge';
@@ -27,7 +38,7 @@ export const ScanPage: React.FC = () => {
     sourceMode: ScannerInputMode;
   } | null>(null);
 
-  // Real YOLO Detection State
+  // Real Detection State (Dual-Model Pipeline)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [hasAnalyzed, setHasAnalyzed] = useState<boolean>(false);
   const [detections, setDetections] = useState<DetectedWasteObject[]>([]);
@@ -55,6 +66,14 @@ export const ScanPage: React.FC = () => {
     uncertaintyNote?: string | null;
     timestamp: string;
   }[]>([]);
+
+  // Voice Recording state (Powered by Cactus Compute Whistle)
+  const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
+  const [isTranscribingVoice, setIsTranscribingVoice] = useState<boolean>(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
 
   // Camera Hook
   const {
@@ -84,6 +103,15 @@ export const ScanPage: React.FC = () => {
     return () => {
       isMounted = false;
       clearInterval(interval);
+    };
+  }, []);
+
+  // Cleanup audio tracks and object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, []);
 
@@ -119,7 +147,7 @@ export const ScanPage: React.FC = () => {
     setErrorMessage(null);
   };
 
-  // Handle frame capture from live camera with optional live tracking handover
+  // Handle frame capture from live camera
   const handleCaptureFrame = async (liveDets?: DetectedWasteObject[]) => {
     const captured = await captureFrame();
     if (captured) {
@@ -151,13 +179,16 @@ export const ScanPage: React.FC = () => {
     resetDetectionState();
   };
 
-  // Retake or Choose another image
+  // Retake or pick a different image
   const handleRetry = () => {
     clearSelectedImage();
     resetDetectionState();
+    if (inputMode === 'camera' && !isCameraActive) {
+      startCamera();
+    }
   };
 
-  // Trigger Real YOLO Waste Analysis
+  // Main Detection Trigger: Invokes backend dual-model vision pipeline
   const handleAnalyzeWaste = async () => {
     if (!selectedImage) return;
 
@@ -165,27 +196,30 @@ export const ScanPage: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      const result = await YoloDetectionService.detectObjects(
-        selectedImage.blob,
-        0.18
-      );
+      const res = await YoloDetectionService.detectObjects(selectedImage.blob, 0.18);
 
-      if (result.success) {
-        setDetections(result.detections);
-        setSelectedObjectId(result.detections.length > 0 ? result.detections[0].id : null);
+      if (res.success && res.detections) {
+        setDetections(res.detections);
         setHasAnalyzed(true);
-        setErrorMessage(null);
+        if (res.detections.length > 0) {
+          setSelectedObjectId(res.detections[0].id);
+        } else {
+          setSelectedObjectId(null);
+        }
+
+        if (res.error) {
+          // Informative notice for partial model failures (e.g. Roboflow key missing)
+          setErrorMessage(res.error);
+        }
       } else {
-        setErrorMessage(result.error || 'Failed to run YOLO detection.');
+        setErrorMessage(res.error || 'Dual-model inference failed. Please verify backend service.');
         setDetections([]);
-        setSelectedObjectId(null);
-        setHasAnalyzed(false);
+        setHasAnalyzed(true);
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Unexpected error during detection.');
+      setErrorMessage(`Failed to connect to VisionX server: ${err.message || err}`);
       setDetections([]);
-      setSelectedObjectId(null);
-      setHasAnalyzed(false);
+      setHasAnalyzed(true);
     } finally {
       setIsAnalyzing(false);
     }
@@ -221,16 +255,30 @@ export const ScanPage: React.FC = () => {
     }
   };
 
+  const isSelectedPerson =
+    selectedObject?.model_source === 'ultralytics_person' ||
+    selectedObject?.model_class_name === 'person' ||
+    selectedObject?.waste_category === 'non_waste' ||
+    selectedObject?.waste_category === null;
+
   // Grounded context for starter chips
-  const starterQuestions = selectedObject ? [
-    `How should I dispose of this ${selectedObject.display_name}?`,
-    `What preparation steps are required before recycling?`,
-    `What are the contamination hazards for this material?`,
-  ] : [
-    'How do I properly sort mixed recyclable containers?',
-    'What items cause mechanical sorting failures?',
-    'What are the most common household recycling errors?',
-  ];
+  const starterQuestions = selectedObject
+    ? isSelectedPerson
+      ? [
+          'Why was a person detected in this photo?',
+          'Are there any recyclable waste items in this frame?',
+          'How does the dual-model vision pipeline work?',
+        ]
+      : [
+          `How should I dispose of this ${selectedObject.display_name}?`,
+          `What preparation steps are required before recycling?`,
+          `What are the contamination hazards for this material?`,
+        ]
+    : [
+        'How do I properly sort mixed recyclable containers?',
+        'What items cause mechanical sorting failures?',
+        'What are the most common household recycling errors?',
+      ];
 
   // Send message to Strands conversational agent
   const handleAskAssistant = async (questionText: string) => {
@@ -286,6 +334,86 @@ export const ScanPage: React.FC = () => {
     }
   };
 
+  // Voice recording handlers (Whistle STT integration)
+  const startVoiceRecording = async () => {
+    setVoiceError(null);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setVoiceError('Audio recording is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : '';
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // Stop audio tracks immediately to release the microphone hardware
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach((track) => track.stop());
+          audioStreamRef.current = null;
+        }
+
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || 'audio/webm',
+        });
+
+        if (audioBlob.size < 100) {
+          setVoiceError('Audio recording was too short or empty.');
+          setIsTranscribingVoice(false);
+          return;
+        }
+
+        setIsTranscribingVoice(true);
+        try {
+          const res = await TranscriptionService.transcribe(audioBlob);
+          if (res.success && res.text) {
+            // Inserts transcript into text field for user review and editing before sending!
+            setAssistantInput((prev) => (prev ? `${prev} ${res.text}` : res.text));
+          } else {
+            setVoiceError(res.error || 'No speech recognized. Please try again.');
+          }
+        } catch (err: any) {
+          setVoiceError(`Transcription error: ${err.message || err}`);
+        } finally {
+          setIsTranscribingVoice(false);
+        }
+      };
+
+      recorder.start(250);
+      setIsRecordingVoice(true);
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setVoiceError('Microphone permission was denied. Please allow microphone access in your browser.');
+      } else {
+        setVoiceError(`Could not access microphone: ${err.message || err}`);
+      }
+      setIsRecordingVoice(false);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingVoice(false);
+  };
+
   // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
@@ -325,18 +453,18 @@ export const ScanPage: React.FC = () => {
               <span className="scan-brand-title">
                 Vision<span className="scan-brand-x">X</span>
               </span>
-              <span className="scan-status-tag">SCANNER</span>
+              <span className="scan-status-tag">DUAL-VISION</span>
             </div>
           </div>
 
           <div className="scan-nav-right">
             {backendHealth.isOnline ? (
               <Badge variant="live" size="sm">
-                YOLO11n LIVE ({backendHealth.device?.toUpperCase() || 'CPU'})
+                DUAL-MODEL VISION LIVE ({backendHealth.device?.toUpperCase() || 'CPU'})
               </Badge>
             ) : (
               <Badge variant="sun" size="sm">
-                LOCAL YOLO SERVER READY (START WITH PYTHON)
+                LOCAL SERVER READY (START WITH PYTHON)
               </Badge>
             )}
           </div>
@@ -349,13 +477,13 @@ export const ScanPage: React.FC = () => {
           {/* Page Heading */}
           <div className="scan-page-heading">
             <div className="scan-eyebrow-row">
-              <span className="scan-eyebrow-pill">VISIONX / WASTE INTELLIGENCE</span>
+              <span className="scan-eyebrow-pill">VISIONX / DUAL-MODEL PIPELINE</span>
             </div>
             <h1 className="scan-page-title">
-              Real-Time <mark className="highlighter">Waste Detection</mark>.
+              Dual-Model <mark className="highlighter">Vision Pipeline</mark>.
             </h1>
             <p className="scan-page-subtitle">
-              Capture a live photo using your camera or upload an image to run real YOLO object detection, explore multi-object bounding boxes, and get actionable disposal instructions.
+              Combining Ultralytics Person Detection and Roboflow Pretrained Waste Detection. Inspect multi-object bounding boxes, identify non-waste people, and voice questions to our AI assistant.
             </p>
           </div>
 
@@ -363,7 +491,6 @@ export const ScanPage: React.FC = () => {
           <div className="scan-workspace-grid">
             {/* LEFT COLUMN: Input Workspace */}
             <div className="workspace-column-input">
-              {/* Mode Selector */}
               <InputModeSelector
                 mode={inputMode}
                 onModeChange={handleModeChange}
@@ -553,35 +680,87 @@ export const ScanPage: React.FC = () => {
               )}
             </div>
 
-            {/* Drawer Input Bar */}
-            <form
-              className="drawer-input-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleAskAssistant(assistantInput);
-              }}
-            >
-              <input
-                type="text"
-                className="drawer-input-field"
-                placeholder={
-                  selectedObject
-                    ? `Ask about ${selectedObject.display_name}...`
-                    : 'Ask about waste sorting...'
-                }
-                value={assistantInput}
-                onChange={(e) => setAssistantInput(e.target.value)}
-                disabled={assistantLoading}
-              />
-              <button
-                type="submit"
-                className="drawer-send-btn"
-                disabled={assistantLoading || !assistantInput.trim()}
-                aria-label="Send question to assistant"
+            {/* Drawer Input Bar with Whistle Voice Input */}
+            <div className="drawer-input-wrapper">
+              {voiceError && (
+                <div className="voice-error-tooltip">
+                  <AlertCircle size={14} />
+                  <span>{voiceError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setVoiceError(null)}
+                    className="voice-err-dismiss"
+                    aria-label="Dismiss error"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+
+              {isRecordingVoice && (
+                <div className="voice-recording-indicator">
+                  <span className="recording-pulse-dot" />
+                  <span>Recording speech... Click mic or Stop when done.</span>
+                </div>
+              )}
+
+              {isTranscribingVoice && (
+                <div className="voice-transcribing-indicator">
+                  <RefreshCw size={14} className="spin-icon" />
+                  <span>Transcribing with Cactus Compute Whistle...</span>
+                </div>
+              )}
+
+              <form
+                className="drawer-input-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAskAssistant(assistantInput);
+                }}
               >
-                <Send size={18} strokeWidth={2.5} />
-              </button>
-            </form>
+                <input
+                  type="text"
+                  className="drawer-input-field"
+                  placeholder={
+                    isRecordingVoice
+                      ? 'Listening to speech...'
+                      : isTranscribingVoice
+                      ? 'Transcribing speech...'
+                      : selectedObject
+                      ? `Ask about ${selectedObject.display_name}...`
+                      : 'Ask about waste sorting...'
+                  }
+                  value={assistantInput}
+                  onChange={(e) => setAssistantInput(e.target.value)}
+                  disabled={assistantLoading || isTranscribingVoice}
+                />
+
+                {/* Microphone Button (Whistle STT) */}
+                <button
+                  type="button"
+                  className={`drawer-mic-btn ${isRecordingVoice ? 'recording' : ''}`}
+                  onClick={isRecordingVoice ? stopVoiceRecording : startVoiceRecording}
+                  disabled={assistantLoading || isTranscribingVoice}
+                  title={isRecordingVoice ? 'Stop recording speech' : 'Voice input (Whistle STT)'}
+                  aria-label={isRecordingVoice ? 'Stop recording speech' : 'Record voice with Whistle'}
+                >
+                  {isRecordingVoice ? (
+                    <Square size={16} strokeWidth={2.5} fill="currentColor" />
+                  ) : (
+                    <Mic size={18} strokeWidth={2.5} />
+                  )}
+                </button>
+
+                <button
+                  type="submit"
+                  className="drawer-send-btn"
+                  disabled={assistantLoading || isTranscribingVoice || !assistantInput.trim()}
+                  aria-label="Send question to assistant"
+                >
+                  <Send size={18} strokeWidth={2.5} />
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

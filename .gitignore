@@ -28,6 +28,18 @@ __pycache__/
 *.so
 .pytest_cache/
 
+# Weights & Cached Models
+weights/
+*.pt
+*.cact
+*.onnx
+runs/
+
+# Temporary audio files
+*.wav
+*.webm
+*.ogg
+
 # Logs
 logs/
 *.log

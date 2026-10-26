@@ -3,7 +3,8 @@ export type WasteCategory =
   | 'organic'
   | 'residual'
   | 'special-handling'
-  | 'uncertain';
+  | 'uncertain'
+  | 'non_waste';
 
 export interface BoundingBox {
   /** Normalized coordinates (0 to 1) relative to preview frame */
@@ -18,25 +19,36 @@ export type MappingStatus = 'verified' | 'conditional' | 'unverified';
 export interface DetectedWasteObject {
   id: string;
   instance_index: number;
-  class_id: number;
+  class_id?: number | null;
+  model_source?: string;
   model_class_name: string;
   display_name: string;
   confidence: number;
   box: BoundingBox;
-  waste_category: WasteCategory;
-  material: string;
+  bbox?: BoundingBox;
+  waste_category?: WasteCategory | string | null;
+  material?: string | null;
   material_verified: boolean;
-  disposal_method: string;
-  recycling_guidance: string;
+  disposal_method?: string | null;
+  recycling_guidance?: string | null;
+  guidance?: string | null;
   preparation_steps: string[];
   contamination_warning?: string | null;
   reusability?: string | null;
-  environmental_impact: string;
+  environmental_impact?: string | null;
   special_handling?: string | null;
   policy_status: PolicyStatus;
   mapping_status: MappingStatus;
   source: string;
   source_url?: string | null;
+}
+
+export interface ModelStatusInfo {
+  status: 'success' | 'failed' | 'skipped';
+  model_name: string;
+  error?: string | null;
+  inference_time_ms?: number | null;
+  detections_count: number;
 }
 
 export interface DetectionApiResponse {
@@ -47,6 +59,8 @@ export interface DetectionApiResponse {
   confidence_threshold: number;
   detections_count: number;
   detections: DetectedWasteObject[];
+  model_statuses?: Record<string, ModelStatusInfo>;
+  pipeline_status?: 'all_succeeded' | 'partial_success' | 'all_failed' | 'no_objects_detected';
   error?: string;
 }
 
@@ -98,6 +112,14 @@ export interface AgentChatApiResponse {
   uncertainty_note?: string | null;
   model_used?: string;
   error?: string;
+}
+
+export interface TranscribeApiResponse {
+  success: boolean;
+  text: string;
+  language?: string | null;
+  duration_ms?: number | null;
+  error?: string | null;
 }
 
 export interface DemoScenario {

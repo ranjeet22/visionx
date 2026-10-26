@@ -1,29 +1,27 @@
 """
 VisionX Post-Detection Conversational Agent
-Powered by Strands Agents framework and Grok/Groq LLM endpoint.
-Complies with Prompt 10 requirements:
-- Object-aware: receives active object, confidence, bbox, category, and all frame detections.
-- Controlled tools: get_detection_context, get_waste_guidance, search_material_safety, get_local_disposal_guidance.
-- Structured output: answer, suggested_questions, sources, needs_clarification, uncertainty_note.
-- Secure: credentials never logged or exposed.
+Powered by Strands Agents framework (Agent, tools, and OpenAIModel provider).
+Provides grounded, object-aware waste sorting assistance, material safety intelligence,
+and strict non-waste handling for person detections.
 """
 
 import os
 import json
 import logging
-import time
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
-import httpx
 
-# Import strands tool decorator
-from strands import tool
+from strands import Agent, tool
+from strands.models.openai import OpenAIModel
 
-# Import internal knowledge base
-from backend.waste_knowledge import WASTE_KNOWLEDGE_BASE, resolve_waste_item
-
-load_dotenv()
+from backend import config
+from backend.knowledge.waste_knowledge import (
+    WASTE_KNOWLEDGE_BASE,
+    CLASS_ALIASES,
+    is_person_class,
+    resolve_waste_item,
+    resolve_person_item
+)
 
 logger = logging.getLogger("visionx.agent")
 
@@ -35,7 +33,7 @@ SESSION_DETECTIONS: Dict[str, Dict[str, Any]] = {}
 class AgentChatResponse(BaseModel):
     answer: str = Field(
         ...,
-        description="Comprehensive, helpful, grounded answer regarding waste disposal and recycling in Markdown format."
+        description="Comprehensive, helpful, grounded answer regarding waste disposal or detection context in GitHub-flavored Markdown."
     )
     suggested_questions: List[str] = Field(
         default_factory=list,
@@ -47,7 +45,7 @@ class AgentChatResponse(BaseModel):
     )
     needs_clarification: bool = Field(
         default=False,
-        description="True if physical material composition cannot be definitively identified from visual inspection."
+        description="True if physical material composition cannot be definitively identified from visual inspection alone."
     )
     uncertainty_note: Optional[str] = Field(
         default=None,
@@ -58,18 +56,17 @@ class AgentChatResponse(BaseModel):
 def register_session_detections(session_id: str, detections: List[Dict[str, Any]]):
     """Stores the latest detections for a given session."""
     SESSION_DETECTIONS[session_id] = {
-        "timestamp": time.time(),
-        "detections": {d.get("id", str(i)): d for i, d in enumerate(detections)}
+        "detections": {str(d.get("id", i)): d for i, d in enumerate(detections)}
     }
 
 
-# --- Four Controlled Strands Tools ---
+# --- Controlled Strands Tools ---
 
 @tool
 def get_detection_context(session_id: str, detection_id: str) -> Dict[str, Any]:
     """
-    Retrieves the exact YOLO detection details (class name, bounding box coordinates,
-    confidence score, and detection timestamp) for a given object in the session.
+    Retrieves the detection details (model source, class name, bounding box coordinates,
+    confidence score, and waste category) for a given object in the session.
     """
     session_data = SESSION_DETECTIONS.get(session_id)
     if not session_data:
@@ -81,23 +78,25 @@ def get_detection_context(session_id: str, detection_id: str) -> Dict[str, Any]:
         return {
             "found": True,
             "id": d.get("id"),
+            "model_source": d.get("model_source"),
             "display_name": d.get("display_name"),
             "model_class_name": d.get("model_class_name"),
             "confidence": d.get("confidence"),
-            "box": d.get("box"),
+            "box": d.get("box") or d.get("bbox"),
             "waste_category": d.get("waste_category"),
-            "material": d.get("material")
+            "material": d.get("material"),
+            "material_verified": d.get("material_verified", False)
         }
 
-    # Fallback to first available detection if specific ID not found
+    # Fallback to primary detection if specific ID not found
     if dets:
         first_d = next(iter(dets.values()))
         return {
             "found": True,
             "id": first_d.get("id"),
+            "model_source": first_d.get("model_source"),
             "display_name": first_d.get("display_name"),
             "confidence": first_d.get("confidence"),
-            "box": first_d.get("box"),
             "note": "Exact ID not matched, returned primary detection in frame."
         }
 
@@ -107,8 +106,8 @@ def get_detection_context(session_id: str, detection_id: str) -> Dict[str, Any]:
 @tool
 def get_waste_guidance(item_or_category: str) -> Dict[str, Any]:
     """
-    Retrieves official waste sorting instructions, bin color, recommended cleaning/preparation
-    steps, and recyclability status from the VisionX Structured Knowledge Base.
+    Retrieves official waste sorting instructions, recommended cleaning/preparation steps,
+    and recyclability status from the VisionX Knowledge Base.
     """
     query = item_or_category.lower().strip()
 
@@ -117,8 +116,7 @@ def get_waste_guidance(item_or_category: str) -> Dict[str, Any]:
         if (
             query in key.lower()
             or query in data.get("display_name", "").lower()
-            or query in data.get("model_class_name", "").lower()
-            or query in data.get("waste_category", "").lower()
+            or query in str(data.get("waste_category", "")).lower()
         ):
             return {
                 "matched_item": data.get("display_name"),
@@ -133,10 +131,10 @@ def get_waste_guidance(item_or_category: str) -> Dict[str, Any]:
 
     return {
         "matched_item": item_or_category,
-        "waste_category": "general-waste",
-        "disposal_method": "Check item for resin identification codes (#1-#7) or place in residual waste.",
-        "recycling_guidance": "Uncertain items should not be placed in curbside recycling without confirming local facility acceptance.",
-        "preparation_steps": ["Empty completely", "Inspect for recyclability symbol"],
+        "waste_category": "uncertain",
+        "disposal_method": "Inspect item for resin identification codes (#1-#7) and verify with local municipal guidelines.",
+        "recycling_guidance": "Uncertain items should not be placed in curbside recycling without confirming facility acceptance.",
+        "preparation_steps": ["Inspect for recyclability symbols", "Confirm with local waste authority"],
         "source": "VisionX Standard Sanitation Protocol"
     }
 
@@ -145,20 +143,20 @@ def get_waste_guidance(item_or_category: str) -> Dict[str, Any]:
 def search_material_safety(material_name: str) -> Dict[str, Any]:
     """
     Returns material safety hazards, contamination risks, and handling precautions
-    (e.g., lithium batteries, broken glass, chemical containers, biohazards).
+    (e.g., lithium batteries, broken glass, chemical containers).
     """
-    m = material_name.lower().strip()
+    m = (material_name or "").lower().strip()
     if any(k in m for k in ["battery", "lithium", "electronic", "cell"]):
         return {
             "hazard_level": "CRITICAL FIRE HAZARD",
-            "risks": "Lithium batteries can explode or ignite when crushed inside municipal compactor trucks or conveyor belts.",
+            "risks": "Lithium batteries ignite volatile fires when crushed inside municipal compactor trucks.",
             "safety_instructions": "Tape both terminals with non-conductive electrical tape. Take immediately to certified battery or e-waste drop-off. NEVER put in curbside bins.",
             "source": "Call2Recycle & EPA Universal Waste Regulations"
         }
     elif any(k in m for k in ["glass", "broken", "jar", "bottle"]):
         return {
             "hazard_level": "MODERATE LACERATION HAZARD",
-            "risks": "Broken glass presents severe injury risks to manual sorting facility workers and contaminates paper pulp.",
+            "risks": "Broken glass presents severe injury risks to manual sorting facility workers.",
             "safety_instructions": "If intact, recycle in curbside glass bin. If broken, wrap securely in cardboard or newspaper and dispose in non-recyclable trash.",
             "source": "Occupational Safety and Health Guidelines for MRFs"
         }
@@ -166,13 +164,13 @@ def search_material_safety(material_name: str) -> Dict[str, Any]:
         return {
             "hazard_level": "EQUIPMENT DAMAGE & MICROPLASTIC HAZARD",
             "risks": "Thin films jam disc screen axles in MRF sorting facilities. Unrecycled plastics break down into microplastics.",
-            "safety_instructions": "Separate rigid bottles (curbside) from thin plastic films (drop-off at participating supermarkets).",
+            "safety_instructions": "Separate rigid containers (curbside) from thin plastic films (drop-off at participating supermarkets).",
             "source": "Association of Plastic Recyclers (APR)"
         }
     elif any(k in m for k in ["organic", "food", "grease", "oil"]):
         return {
             "hazard_level": "COMMODITY CONTAMINATION",
-            "risks": "Grease and moisture ruin dry paper and cardboard, making entire truckloads unrecyclable.",
+            "risks": "Grease and food oils permanently ruin dry paper and cardboard pulping.",
             "safety_instructions": "Compost food scraps or use green organic bin. Thoroughly rinse containers before recycling.",
             "source": "Municipal Composting Protocols"
         }
@@ -188,11 +186,11 @@ def search_material_safety(material_name: str) -> Dict[str, Any]:
 @tool
 def get_local_disposal_guidance(locality: str, category: str) -> Dict[str, Any]:
     """
-    Provides regional municipal recycling standards, special drop-off programs,
-    and container deposit scheme (Bottle Bill) guidance for a given locality.
+    Provides regional municipal recycling standards, container deposit scheme guidance,
+    and drop-off instructions for a given locality.
     """
-    loc = locality.lower().strip()
-    cat = category.lower().strip()
+    loc = (locality or "").lower().strip()
+    cat = (category or "").lower().strip()
 
     has_deposit = any(k in loc for k in ["california", "oregon", "michigan", "new york", "germany", "australia"])
 
@@ -202,70 +200,143 @@ def get_local_disposal_guidance(locality: str, category: str) -> Dict[str, Any]:
         "deposit_return_eligible": has_deposit and "recyclable" in cat,
         "deposit_refund_amount": "5-10 cents per beverage container where applicable" if has_deposit else None,
         "curbside_rules": "Single-stream blue bin for clean rigid containers and dry paper. Green bin for organics. Black/gray bin for landfill residual.",
-        "drop_off_programs": "Supermarket drop-off bins accept LDPE plastic bags and bread bags. Municipal civic amenity sites accept e-waste and chemicals.",
+        "drop_off_programs": "Supermarket drop-off bins accept clean soft plastic films. Municipal civic amenity sites accept e-waste and batteries.",
         "source": "Global Recycling Directory & Municipal Waste Guidelines"
     }
 
 
-# --- Agent Orchestration & Grok/Groq LLM Calling ---
+def _get_api_credentials() -> Optional[tuple[str, str, List[str]]]:
+    """Resolves API key, endpoint URL, and candidate models without exposing secrets."""
+    key = config.GROK_API
+    if not key or key == "your_api_key_here":
+        return None
 
-SYSTEM_PROMPT = """You are VisionX Assistant, a world-class AI environmental engineer and waste classification specialist.
-You work inside the VisionX platform, helping users understand how to properly recycle, compost, reuse, or dispose of items detected in their camera or uploaded photos by the YOLO computer vision model.
+    if key.startswith("gsk_"):
+        # Groq endpoint
+        base_url = "https://api.groq.com/openai/v1"
+        candidate_models = ["llama-3.1-8b-instant", "qwen-2.5-32b"]
+    elif key.startswith("xai-"):
+        # Official xAI Grok endpoint
+        base_url = "https://api.x.ai/v1"
+        candidate_models = ["grok-beta", "grok-2-latest"]
+    else:
+        base_url = "https://api.groq.com/openai/v1"
+        candidate_models = ["llama-3.1-8b-instant"]
+
+    return key, base_url, candidate_models
+
+
+SYSTEM_PROMPT = """You are VisionX Assistant, an expert AI environmental engineer and waste classification specialist.
+You work inside the VisionX platform, helping users understand how to properly recycle, compost, reuse, or dispose of items detected in their camera or uploaded photos by the dual-model computer vision pipeline (Ultralytics Person Detection and Roboflow Waste Detection).
 
 CRITICAL OPERATIONAL RULES:
-1. OBJECT AWARENESS:
-   - You are informed of the current object the user selected, its YOLO model classification, confidence score, bounding box, and mapped waste category.
-   - You also know all other detected objects present in the same camera frame / image.
-   - When appropriate, refer to these detections to provide context (e.g. "Along with your plastic bottle, I noticed a cardboard box in the frame—be sure to keep the paper dry!").
-2. ACCURACY & SAFETY:
-   - Be clear, practical, and direct.
-   - Emphasize preparation steps (e.g., empty liquids, rinse food residue, crush flat, leave caps on or off).
-   - If material composition cannot be definitively established from visual camera input alone (e.g., confusing plastic resins #1 vs #7, or unlabelled composite plastics), be transparent and state the uncertainty in the note.
-3. OUTPUT FORMAT:
-   - You must ALWAYS respond in valid JSON adhering strictly to this schema:
-     {
-       "answer": "Your comprehensive, helpful answer in GitHub-flavored Markdown...",
-       "suggested_questions": ["Question 1?", "Question 2?", "Question 3?"],
-       "sources": ["Source 1", "Source 2"],
-       "needs_clarification": false,
-       "uncertainty_note": null
-     }
-   - The "suggested_questions" list MUST contain exactly 3 concise, highly relevant questions that the user can ask next with a single click.
-   - Never output markdown formatting fences like ```json ... ``` around the JSON if possible, just the raw JSON object.
+1. OBJECT AWARENESS & GROUNDING:
+   - You are informed of the current object the user selected, its model source, classification, confidence score, and waste category.
+   - You also know all other detected objects present in the same frame.
+2. SPECIAL RULE FOR PERSON DETECTIONS:
+   - A person is NOT a waste item!
+   - If the selected object is a Person or has model_source 'ultralytics_person':
+     - Explain clearly that a person was detected by the computer vision model.
+     - State explicitly: "Person detected. This is not a waste item, so waste disposal guidance does not apply."
+     - NEVER provide recycling instructions, bin colors, or disposal methods for a person.
+     - If other waste items exist in the frame, you may point them out (e.g., "However, there is also a plastic bottle in the image that can be recycled!").
+3. ACCURACY & UNCERTAINTY:
+   - Never guess polymer grades from appearance alone. If material is not verified, note that physical inspection of the resin stamp (#1-#7) is needed.
+   - For unknown waste classes, advise caution and local sanitation verification.
+4. OUTPUT SCHEMA:
+   - Your response must strictly contain: answer, suggested_questions (exactly 3 relevant follow-ups), sources, needs_clarification (bool), uncertainty_note (optional string).
 """
 
 
-def _get_api_credentials() -> tuple[str, str, List[str]]:
-    """Resolves API key, endpoint URL, and candidate models without exposing secrets."""
-    key = os.getenv("GROK_API") or os.getenv("XAI_API_KEY") or os.getenv("GROQ_API_KEY")
-    if not key:
-        raise ValueError("GROK_API credentials not configured in .env")
+def _generate_grounded_fallback(
+    selected_object: Optional[Dict[str, Any]],
+    user_question: str,
+    all_detections: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Generates a deterministic, verified grounded fallback when the cloud LLM is unavailable.
+    Guarantees no false claims of live LLM inference.
+    """
+    if not selected_object:
+        # General question with no selected item
+        other_items = [d.get("display_name") for d in (all_detections or []) if d.get("display_name")]
+        summary = f"Detected in frame: {', '.join(other_items)}." if other_items else "No objects currently selected."
+        return {
+            "answer": (
+                f"**VisionX Offline Assistant (Local Knowledge Base)**\n\n"
+                f"{summary}\n\n"
+                f"To get specific disposal instructions, select an object from the detections panel or ensure your live AI assistant credentials (`GROK_API`) are configured in `.env`."
+            ),
+            "suggested_questions": [
+                "How do I recycle plastic bottles?",
+                "What can go into the green compost bin?",
+                "Where should electronic waste and batteries be dropped off?"
+            ],
+            "sources": ["VisionX Local Knowledge Base"],
+            "needs_clarification": False,
+            "uncertainty_note": "Cloud LLM unavailable; response generated from local verified knowledge base.",
+            "model_used": "visionx-local-knowledge-fallback"
+        }
 
-    # Determine endpoint and candidate models based on key prefix
-    if key.startswith("gsk_"):
-        # Groq API endpoint
-        base_url = "https://api.groq.com/openai/v1/chat/completions"
-        candidate_models = [
-            "llama-3.1-8b-instant",
-            "qwen/qwen3.8-27b",
-            "llama-3.3-70b-specdec"
-        ]
-    elif key.startswith("xai-"):
-        # Official xAI Grok endpoint
-        base_url = "https://api.x.ai/v1/chat/completions"
-        candidate_models = [
-            "grok-beta",
-            "grok-2-latest"
-        ]
-    else:
-        # Default endpoint
-        base_url = "https://api.groq.com/openai/v1/chat/completions"
-        candidate_models = [
-            "llama-3.1-8b-instant",
-            "qwen/qwen3.8-27b"
-        ]
+    is_person = (
+        selected_object.get("model_source") == "ultralytics_person"
+        or is_person_class(str(selected_object.get("model_class_name", "")), selected_object.get("class_id"))
+    )
 
-    return key, base_url, candidate_models
+    if is_person:
+        return {
+            "answer": (
+                "### Detection: Person\n\n"
+                "**Person detected.** This is a human detected by the Ultralytics computer vision model, not a waste item. "
+                "Waste disposal guidance does not apply to people.\n\n"
+                "If you intended to scan a waste item, please point the camera directly at the item or select the item's bounding box from the scan results."
+            ),
+            "suggested_questions": [
+                "Why was a person detected in the image?",
+                "Are there any waste items detected in this photo?",
+                "How does the dual-model detection pipeline work?"
+            ],
+            "sources": ["Ultralytics COCO Person Detection"],
+            "needs_clarification": False,
+            "uncertainty_note": None,
+            "model_used": "visionx-person-guardrail"
+        }
+
+    # Waste item fallback
+    disp_name = selected_object.get("display_name", "Waste Item")
+    guidance = get_waste_guidance(disp_name)
+    safety = search_material_safety(selected_object.get("material", ""))
+
+    prep_list = guidance.get("preparation_steps", ["Empty completely", "Inspect for recyclability symbol"])
+    prep_md = "\n".join([f"- {s}" for s in prep_list])
+
+    hazard_section = ""
+    if safety.get("hazard_level") and "LOW" not in safety.get("hazard_level", ""):
+        hazard_section = f"\n\n**Safety Alert ({safety.get('hazard_level')}):** {safety.get('risks')}\n*Instructions:* {safety.get('safety_instructions')}"
+
+    answer = (
+        f"### Disposal Guidance: {disp_name}\n\n"
+        f"**Category:** `{guidance.get('waste_category', 'general')}`\n\n"
+        f"**Disposal Method:** {guidance.get('disposal_method')}\n\n"
+        f"**Recycling Guidance:** {guidance.get('recycling_guidance')}\n\n"
+        f"**Preparation Steps:**\n{prep_md}"
+        f"{hazard_section}"
+    )
+
+    suggested = [
+        f"How should I clean this {disp_name} before disposal?",
+        "What happens if food residue is left on recyclables?",
+        "Where can I find my nearest specialized drop-off point?"
+    ]
+
+    return {
+        "answer": answer,
+        "suggested_questions": suggested,
+        "sources": [guidance.get("source", "VisionX Knowledge Engine")],
+        "needs_clarification": not selected_object.get("material_verified", False),
+        "uncertainty_note": "Cloud LLM unavailable; response generated from local verified knowledge base. Visual inspection cannot confirm resin codes without stamp verification.",
+        "model_used": "visionx-local-knowledge-fallback"
+    }
 
 
 async def execute_agent_chat(
@@ -277,137 +348,134 @@ async def execute_agent_chat(
     locality: Optional[str] = "United States / General Municipal"
 ) -> Dict[str, Any]:
     """
-    Executes a post-detection conversational turn using Strands tools & Grok LLM.
-    Returns structured dict matching AgentChatResponse.
+    Executes a post-detection conversational turn using Strands Agents SDK.
+    Grounds context server-side, queries live LLM, and gracefully falls back to verified knowledge.
     """
-    key, base_url, candidate_models = _get_api_credentials()
-
-    # Register detections into session cache
     if all_detections:
         register_session_detections(session_id, all_detections)
 
-    # 1. Pre-fetch tool intelligence for the active detection
-    active_name = selected_object.get("display_name", "Waste Item") if selected_object else "Waste Item"
-    active_category = selected_object.get("waste_category", "general") if selected_object else "general"
-    active_material = selected_object.get("material", "Unknown") if selected_object else "Unknown"
+    creds = _get_api_credentials()
+    if not creds:
+        logger.info("No LLM API credentials configured; using structured verified local fallback.")
+        return _generate_grounded_fallback(selected_object, user_question, all_detections)
 
-    guidance_context = get_waste_guidance(active_name)
-    safety_context = search_material_safety(active_material)
-    local_context = get_local_disposal_guidance(locality or "General", active_category)
+    api_key, base_url, candidate_models = creds
 
-    # Construct frame context
-    frame_context_str = ""
+    # Build detection-aware context server-side
+    active_name = selected_object.get("display_name", "N/A") if selected_object else "None"
+    active_source = selected_object.get("model_source", "N/A") if selected_object else "N/A"
+    active_class = selected_object.get("model_class_name", "N/A") if selected_object else "N/A"
+    active_conf = f"{int(float(selected_object.get('confidence', 0)) * 100)}%" if selected_object else "N/A"
+    active_cat = selected_object.get("waste_category", "N/A") if selected_object else "N/A"
+    active_mat = selected_object.get("material", "N/A") if selected_object else "N/A"
+    is_person = (
+        active_source == "ultralytics_person"
+        or is_person_class(str(active_class), selected_object.get("class_id") if selected_object else None)
+    )
+
+    frame_context_str = "None"
     if all_detections and len(all_detections) > 0:
         other_items = [
-            f"{d.get('display_name')} (Confidence: {int(float(d.get('confidence', 0)) * 100)}%)"
+            f"{d.get('display_name')} (Source: {d.get('model_source')}, Conf: {int(float(d.get('confidence', 0)) * 100)}%)"
             for d in all_detections
         ]
-        frame_context_str = f"All objects detected in this photo: {', '.join(other_items)}."
+        frame_context_str = "; ".join(other_items)
 
-    # Construct structured system message
-    full_system = f"""{SYSTEM_PROMPT}
-
-CURRENT DETECTION CONTEXT:
-- Active Selected Object: {active_name}
-- YOLO Class: {selected_object.get('model_class_name') if selected_object else 'N/A'}
-- Model Confidence: {int(float(selected_object.get('confidence', 0.8)) * 100) if selected_object else 'N/A'}%
-- Mapped Waste Category: {active_category}
-- Identified Material: {active_material}
-- {frame_context_str}
-
-RETRIEVED KNOWLEDGE BASE GUIDANCE:
-{json.dumps(guidance_context, indent=2)}
-
-MATERIAL SAFETY CONTEXT:
-{json.dumps(safety_context, indent=2)}
-
-LOCAL DISPOSAL RULES:
-{json.dumps(local_context, indent=2)}
+    detection_context_prompt = f"""
+CURRENT SCAN CONTEXT:
+- Selected Object: {active_name}
+- Model Source: {active_source}
+- Original Model Class: {active_class}
+- Confidence: {active_conf}
+- Waste Category: {active_cat}
+- Material: {active_mat}
+- Is Person: {is_person}
+- All Detections In Frame: {frame_context_str}
+- Locality: {locality or 'General Municipal'}
 """
 
-    # Build messages array including conversation history
-    messages: List[Dict[str, str]] = [{"role": "system", "content": full_system}]
+    full_system = f"{SYSTEM_PROMPT}\n{detection_context_prompt}"
 
-    if history:
-        for turn in history[-6:]:  # Keep last 6 turns for context
-            role = "user" if turn.get("sender") == "user" else "assistant"
-            messages.append({"role": role, "content": turn.get("text", "")})
-
-    messages.append({
-        "role": "user",
-        "content": f"{user_question}\n\nPlease reply in strict JSON format with keys: answer, suggested_questions, sources, needs_clarification, uncertainty_note."
-    })
-
-    headers = {
-        "Authorization": f"Bearer {key}",
-        "Content-Type": "application/json",
-        "User-Agent": "VisionX/1.0"
-    }
-
+    # Try live Strands Agent with candidate models
     last_error = None
-    async with httpx.AsyncClient(timeout=25.0) as client:
-        for model_name in candidate_models:
-            try:
-                payload = {
-                    "model": model_name,
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "response_format": {"type": "json_object"}
+    for model_name in candidate_models:
+        try:
+            strands_model = OpenAIModel(
+                model_id=model_name,
+                client_args={
+                    "api_key": api_key,
+                    "base_url": base_url,
                 }
+            )
 
-                resp = await client.post(base_url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    content = data["choices"][0]["message"]["content"]
-                    
-                    # Parse JSON content safely
-                    parsed = json.loads(content)
-                    
-                    # Ensure all required keys exist
-                    answer = parsed.get("answer") or parsed.get("message") or content
-                    suggested = parsed.get("suggested_questions", [])
-                    if not isinstance(suggested, list) or len(suggested) == 0:
-                        suggested = [
-                            f"How should I clean this {active_name} before recycling?",
-                            f"What happens if I put this in the wrong bin?",
-                            f"Can the bottle cap or lid be recycled together with it?"
-                        ]
+            agent = Agent(
+                model=strands_model,
+                tools=[
+                    get_detection_context,
+                    get_waste_guidance,
+                    search_material_safety,
+                    get_local_disposal_guidance
+                ],
+                system_prompt=full_system,
+                structured_output_model=AgentChatResponse
+            )
 
-                    sources = parsed.get("sources", ["VisionX Knowledge Engine", "EPA Municipal Recycling Guide"])
-                    needs_clarification = bool(parsed.get("needs_clarification", False))
-                    uncertainty_note = parsed.get("uncertainty_note")
+            # Build user prompt with history if provided
+            history_text = ""
+            if history:
+                turns = []
+                for turn in history[-4:]:
+                    sender = "User" if turn.get("sender") == "user" else "Assistant"
+                    turns.append(f"{sender}: {turn.get('text', '')}")
+                history_text = "Previous conversation:\n" + "\n".join(turns) + "\n\n"
 
+            prompt_content = f"{history_text}User Question: {user_question}"
+            agent_result = await agent.invoke_async(prompt_content)
+
+            # Extract structured response
+            if hasattr(agent_result, "structured_output") and agent_result.structured_output:
+                res: AgentChatResponse = agent_result.structured_output
+                return {
+                    "answer": res.answer,
+                    "suggested_questions": res.suggested_questions[:3],
+                    "sources": res.sources,
+                    "needs_clarification": res.needs_clarification,
+                    "uncertainty_note": res.uncertainty_note,
+                    "model_used": f"strands-{model_name}"
+                }
+            elif hasattr(agent_result, "output") and agent_result.output:
+                # Text output parsed or converted
+                text_out = str(agent_result.output)
+                try:
+                    data = json.loads(text_out)
                     return {
-                        "answer": answer,
-                        "suggested_questions": suggested[:3],
-                        "sources": sources,
-                        "needs_clarification": needs_clarification,
-                        "uncertainty_note": uncertainty_note,
-                        "model_used": model_name
+                        "answer": data.get("answer", text_out),
+                        "suggested_questions": data.get("suggested_questions", [])[:3],
+                        "sources": data.get("sources", ["VisionX Knowledge Engine"]),
+                        "needs_clarification": bool(data.get("needs_clarification", False)),
+                        "uncertainty_note": data.get("uncertainty_note"),
+                        "model_used": f"strands-{model_name}"
                     }
-                else:
-                    last_error = f"Model {model_name} HTTP {resp.status_code}: {resp.text}"
-                    logger.warning("Agent fallback triggered: %s", last_error)
-            except Exception as e:
-                last_error = str(e)
-                logger.warning("Agent call failed for %s: %s", model_name, e)
+                except Exception:
+                    return {
+                        "answer": text_out,
+                        "suggested_questions": [
+                            f"How should I clean this {active_name}?",
+                            "What bin does this item belong in?",
+                            "What are the local rules for this material?"
+                        ],
+                        "sources": ["VisionX Knowledge Engine"],
+                        "needs_clarification": False,
+                        "uncertainty_note": None,
+                        "model_used": f"strands-{model_name}"
+                    }
 
-    # Fallback to local grounded knowledge if all cloud attempts failed
-    logger.error("All agent models failed, providing structured grounded fallback: %s", last_error)
-    return {
-        "answer": (
-            f"**Disposal Method for {active_name}:** {guidance_context.get('disposal_method')}\n\n"
-            f"**Recycling Guidance:** {guidance_context.get('recycling_guidance')}\n\n"
-            f"**Preparation Steps:**\n" +
-            "\n".join([f"- {s}" for s in guidance_context.get("preparation_steps", ["Empty and rinse"])])
-        ),
-        "suggested_questions": [
-            f"How should I clean this {active_name} before disposal?",
-            "What happens if food residue is left on recyclables?",
-            "Where can I find my nearest drop-off point?"
-        ],
-        "sources": [guidance_context.get("source", "VisionX Knowledge Engine")],
-        "needs_clarification": not selected_object.get("material_verified", False) if selected_object else False,
-        "uncertainty_note": "Visual detection cannot verify exact polymer grade without physical resin stamp inspection.",
-        "model_used": "visionx-grounded-fallback"
-    }
+        except Exception as e:
+            last_error = f"{model_name}: {str(e)}"
+            logger.warning(f"Strands Agent attempt with {model_name} failed: {e}")
+
+    # If live agent calls failed, safely return the verified grounded fallback
+    logger.error(f"All Strands model attempts failed ({last_error}). Providing grounded fallback.")
+    fallback = _generate_grounded_fallback(selected_object, user_question, all_detections)
+    fallback["uncertainty_note"] = f"Live LLM unavailable ({last_error}). Grounded in verified local knowledge base."
+    return fallback
