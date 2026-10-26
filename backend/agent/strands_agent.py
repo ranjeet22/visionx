@@ -214,14 +214,18 @@ def _get_api_credentials() -> Optional[tuple[str, str, List[str]]]:
     if key.startswith("gsk_"):
         # Groq endpoint
         base_url = "https://api.groq.com/openai/v1"
-        candidate_models = ["llama-3.1-8b-instant", "qwen-2.5-32b"]
+        candidate_models = [
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
+        ]
     elif key.startswith("xai-"):
         # Official xAI Grok endpoint
         base_url = "https://api.x.ai/v1"
         candidate_models = ["grok-beta", "grok-2-latest"]
     else:
         base_url = "https://api.groq.com/openai/v1"
-        candidate_models = ["llama-3.1-8b-instant"]
+        candidate_models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
 
     return key, base_url, candidate_models
 
