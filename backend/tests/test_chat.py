@@ -116,3 +116,40 @@ async def test_chat_unknown_waste_class():
 
         assert "uncertain" in res["answer"].lower() or "municipal" in res["answer"].lower()
         assert res["needs_clarification"] is True
+
+
+@pytest.mark.asyncio
+async def test_chat_off_topic_programming_refusal():
+    """
+    CRITICAL GUARDRAIL: When a user asks for programming code or off-topic tasks
+    (e.g., 'Give a python code to print hello world'), the model MUST REFUSE.
+    """
+    res = await execute_agent_chat(
+        session_id="test-off-topic",
+        user_question="Give a python code to print hello world"
+    )
+
+    assert "answer" in res
+    assert "cannot assist with general programming" in res["answer"].lower() or "guardrail" in res["answer"].lower()
+    assert "print(" not in res["answer"]
+    assert "```python" not in res["answer"]
+    assert res["model_used"] == "visionx-domain-guardrail"
+    assert len(res["suggested_questions"]) == 3
+    # Suggested questions must be waste/recycling oriented
+    assert any("recycl" in q.lower() or "waste" in q.lower() for q in res["suggested_questions"])
+
+
+@pytest.mark.asyncio
+async def test_chat_legitimate_waste_resin_code_allowed():
+    """
+    Legitimate environmental questions containing 'code' (like 'resin code')
+    must NOT be falsely rejected as programming requests.
+    """
+    with patch("backend.agent.strands_agent._get_api_credentials", return_value=None):
+        res = await execute_agent_chat(
+            session_id="test-resin-code",
+            user_question="What does plastic resin code 1 mean?"
+        )
+
+        assert res["model_used"] != "visionx-domain-guardrail"
+        assert "plastic" in res["answer"].lower() or "offline" in res["answer"].lower()

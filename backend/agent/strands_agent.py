@@ -230,26 +230,108 @@ def _get_api_credentials() -> Optional[tuple[str, str, List[str]]]:
     return key, base_url, candidate_models
 
 
-SYSTEM_PROMPT = """You are VisionX Assistant, an expert AI environmental engineer and waste classification specialist.
-You work inside the VisionX platform, helping users understand how to properly recycle, compost, reuse, or dispose of items detected in their camera or uploaded photos by the dual-model computer vision pipeline (Ultralytics Person Detection and Roboflow Waste Detection).
+SYSTEM_PROMPT = """You are VisionX Assistant, an expert AI environmental engineer and waste classification specialist embedded in the VisionX platform.
+You assist users with proper recycling, composting, material safety, hazardous waste handling, reuse, circular economy, and understanding detections from the dual-model computer vision system (Ultralytics Person Detection and Roboflow Waste Detection).
 
-CRITICAL OPERATIONAL RULES:
-1. OBJECT AWARENESS & GROUNDING:
-   - You are informed of the current object the user selected, its model source, classification, confidence score, and waste category.
-   - You also know all other detected objects present in the same frame.
-2. SPECIAL RULE FOR PERSON DETECTIONS:
-   - A person is NOT a waste item!
-   - If the selected object is a Person or has model_source 'ultralytics_person':
-     - Explain clearly that a person was detected by the computer vision model.
-     - State explicitly: "Person detected. This is not a waste item, so waste disposal guidance does not apply."
-     - NEVER provide recycling instructions, bin colors, or disposal methods for a person.
-     - If other waste items exist in the frame, you may point them out (e.g., "However, there is also a plastic bottle in the image that can be recycled!").
-3. ACCURACY & UNCERTAINTY:
-   - Never guess polymer grades from appearance alone. If material is not verified, note that physical inspection of the resin stamp (#1-#7) is needed.
-   - For unknown waste classes, advise caution and local sanitation verification.
-4. OUTPUT SCHEMA:
-   - Your response must strictly contain: answer, suggested_questions (exactly 3 relevant follow-ups), sources, needs_clarification (bool), uncertainty_note (optional string).
+=== CRITICAL GUARDRAIL 1: STRICT DOMAIN BOUNDARY & OFF-TOPIC REFUSAL (ZERO-TOLERANCE) ===
+- Your operational domain is STRICTLY AND EXCLUSIVELY limited to:
+  * Waste management, sorting, and disposal guidelines
+  * Recycling, composting, landfill, and e-waste handling
+  * Material safety, chemical hazards, and contamination risks of waste items
+  * Environmental sustainability, conservation, and circular economy
+  * VisionX camera detections, confidence scores, and bounding boxes
+- YOU MUST REFUSE TO ANSWER ANY OFF-TOPIC REQUESTS. Under NO circumstance should you fulfill them.
+- FORBIDDEN TOPICS INCLUDE BUT ARE NOT LIMITED TO:
+  * Computer programming, writing code, generating scripts, debugging, or software engineering in ANY language (Python, JavaScript, C++, Java, Bash, HTML, etc.). E.g., if asked "Give a python code to print hello world" or "Write a script in Python", YOU MUST REFUSE.
+  * General mathematics, physics, or academic homework problems.
+  * Creative writing, essays, stories, poems, songs, roleplay, or jokes.
+  * General world knowledge, pop culture, history, celebrities, movies, sports, politics, weather, finance, or medical advice.
+- HOW TO REFUSE AN OFF-TOPIC REQUEST:
+  * Politely, clearly, and firmly decline:
+    "I am the VisionX Assistant, specialized exclusively in waste classification, recycling, material safety, and computer vision detection guidance. I cannot assist with general programming, writing code, or topics outside environmental and waste management. Please ask me about sorting waste, recycling materials, hazardous items, or the objects detected in your scan."
+  * NEVER generate code, code blocks (```python, etc.), programming snippets, or off-topic information.
+  * Set `sources: ["VisionX Domain Boundary Policy"]`.
+  * Set `needs_clarification: false`.
+  * Set `uncertainty_note: null`.
+  * Populate `suggested_questions` with exactly 3 relevant waste or environmental questions (e.g., ["How do I properly recycle plastic containers?", "Where can electronic waste and batteries be safely dropped off?", "What are the contamination hazards for beverage bottles?"]).
+
+=== CRITICAL GUARDRAIL 2: PERSON DETECTIONS ARE NOT WASTE ===
+- A person/human is NOT a waste item!
+- If the selected object is a Person or has model_source 'ultralytics_person' or class 'person':
+  * State clearly and unambiguously: "Person detected. This is not a waste item, so waste disposal guidance does not apply."
+  * NEVER provide recycling bins, composting, disposal methods, or degradation times for a human.
+  * If other waste objects are in the frame, you may point them out (e.g., "However, there is also a plastic bottle in the image that can be recycled!").
+
+=== CRITICAL GUARDRAIL 3: ACCURACY & MATERIAL UNCERTAINTY ===
+- Never claim visual inspection alone guarantees exact resin grade (#1-#7) or chemical purity.
+- If material composition is unverified, advise physical verification of the SPI resin identification code on the container.
+- For lithium batteries, aerosol cans, and broken glass, always issue critical safety warnings (fire hazard, puncture/laceration risk).
+
+=== OUTPUT SCHEMA CONTRACT ===
+- Return a structured response strictly matching:
+  - answer: Markdown formatted string adhering to all rules above.
+  - suggested_questions: Exactly 3 relevant environmental/waste follow-up questions.
+  - sources: Authoritative sources cited.
+  - needs_clarification: Boolean flag.
+  - uncertainty_note: Optional string note.
 """
+
+import re
+
+OFF_TOPIC_CODING_PATTERNS = [
+    r"\b(write|give|generate|create|show|provide|print)\b.*\b(code|python|script|program|javascript|java|c\+\+|html|css|bash|sql|function|algorithm)\b",
+    r"\bprint\s*\(?['\"]hello world",
+    r"\b(write|tell)\b.*\b(poem|story|joke|song|essay|novel)\b",
+    r"\b(solve|calculate)\b.*\b(derivative|integral|equation|matrix|math problem)\b",
+]
+
+WASTE_CODE_EXCEPTIONS = [
+    "resin code", "recycling code", "ric code", "plastic code", "spi code",
+    "resin identification code", "qr code", "barcode", "upc code", "sanitation code",
+    "building code", "waste code", "hazard code"
+]
+
+
+def is_off_topic_query(query: str) -> bool:
+    """
+    Detects queries clearly outside VisionX's environmental and waste sorting mission.
+    Protects against code generation, math solving, creative writing, and prompt leaks.
+    """
+    if not query:
+        return False
+    q = query.lower().strip()
+
+    # Allow legitimate recycling/waste terms that include 'code'
+    for exc in WASTE_CODE_EXCEPTIONS:
+        if exc in q:
+            return False
+
+    for pattern in OFF_TOPIC_CODING_PATTERNS:
+        if re.search(pattern, q, re.IGNORECASE):
+            return True
+
+    return False
+
+
+def generate_off_topic_refusal() -> Dict[str, Any]:
+    """Returns a structured, compliant refusal response when an off-topic query is detected."""
+    return {
+        "answer": (
+            "### VisionX Domain Guardrail\n\n"
+            "I am the **VisionX Assistant**, specialized exclusively in waste classification, recycling, composting, material safety, and computer vision detection guidance.\n\n"
+            "I cannot assist with general programming, writing code, or topics outside environmental and waste management.\n\n"
+            "Please ask me about sorting waste, recycling materials, handling hazardous items, or the objects detected in your scan!"
+        ),
+        "suggested_questions": [
+            "How do I properly recycle plastic containers?",
+            "Where can electronic waste and batteries be safely dropped off?",
+            "What are the contamination hazards for beverage bottles?"
+        ],
+        "sources": ["VisionX Domain Guardrail Policy"],
+        "needs_clarification": False,
+        "uncertainty_note": None,
+        "model_used": "visionx-domain-guardrail"
+    }
 
 
 def _generate_grounded_fallback(
@@ -261,6 +343,10 @@ def _generate_grounded_fallback(
     Generates a deterministic, verified grounded fallback when the cloud LLM is unavailable.
     Guarantees no false claims of live LLM inference.
     """
+    # Guardrail: Never answer off-topic queries in fallback
+    if is_off_topic_query(user_question):
+        return generate_off_topic_refusal()
+
     if not selected_object:
         # General question with no selected item
         other_items = [d.get("display_name") for d in (all_detections or []) if d.get("display_name")]
@@ -355,6 +441,11 @@ async def execute_agent_chat(
     Executes a post-detection conversational turn using Strands Agents SDK.
     Grounds context server-side, queries live LLM, and gracefully falls back to verified knowledge.
     """
+    # Guardrail Check 1: Zero-tolerance refusal for off-topic coding / non-environmental queries
+    if is_off_topic_query(user_question):
+        logger.info(f"Guardrail intercepted off-topic query: '{user_question}'")
+        return generate_off_topic_refusal()
+
     if all_detections:
         register_session_detections(session_id, all_detections)
 
@@ -439,6 +530,11 @@ CURRENT SCAN CONTEXT:
             # Extract structured response
             if hasattr(agent_result, "structured_output") and agent_result.structured_output:
                 res: AgentChatResponse = agent_result.structured_output
+                # Post-check: ensure no programming code leaked through
+                if re.search(r"```(?:python|javascript|js|ts|cpp|c|java|bash|sh|php|ruby|go|rust)\b", res.answer, re.IGNORECASE):
+                    logger.warning("Guardrail caught code block in agent answer; returning refusal.")
+                    return generate_off_topic_refusal()
+
                 return {
                     "answer": res.answer,
                     "suggested_questions": res.suggested_questions[:3],
@@ -450,6 +546,10 @@ CURRENT SCAN CONTEXT:
             elif hasattr(agent_result, "output") and agent_result.output:
                 # Text output parsed or converted
                 text_out = str(agent_result.output)
+                if re.search(r"```(?:python|javascript|js|ts|cpp|c|java|bash|sh|php|ruby|go|rust)\b", text_out, re.IGNORECASE):
+                    logger.warning("Guardrail caught code block in agent raw text output; returning refusal.")
+                    return generate_off_topic_refusal()
+
                 try:
                     data = json.loads(text_out)
                     return {
