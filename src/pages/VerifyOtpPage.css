@@ -25,6 +25,57 @@
   box-shadow: 3px 3px 0 #3B82F6;
 }
 
+.alert-dev-otp {
+  background-color: #FFFBEB;
+  border: 2px solid var(--sun);
+  box-shadow: 3px 3px 0 var(--ink);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.dev-otp-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dev-tag {
+  background-color: var(--sun);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 1px 6px;
+}
+
+.dev-hint {
+  font-size: 0.75rem;
+  color: var(--grey-text);
+}
+
+.dev-otp-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--white);
+  border: 1.5px dashed var(--ink);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 2px;
+}
+
+.dev-code-highlight {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--ink);
+}
+
 .otp-digits-row {
   display: flex;
   justify-content: center;

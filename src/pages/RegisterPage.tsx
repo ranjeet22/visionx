@@ -82,6 +82,8 @@ export const RegisterPage: React.FC = () => {
           userId: cleanUserId,
           maskedEmail: res.masked_email,
           cooldownSeconds: res.cooldown_seconds || 60,
+          devOtp: res.email_delivery?.dev_otp,
+          smtpConfigured: res.email_delivery?.smtp_configured,
         });
       } else {
         setError(res.error || 'Registration failed. Please check your inputs.');

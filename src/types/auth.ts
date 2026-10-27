@@ -18,6 +18,8 @@ export interface AuthApiResponse {
   email_delivery?: {
     success: boolean;
     info: string;
+    dev_otp?: string | null;
+    smtp_configured?: boolean;
   };
 }
 

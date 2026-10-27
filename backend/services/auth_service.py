@@ -170,7 +170,7 @@ def register_user(
             )
 
     # Deliver OTP email
-    send_ok, send_info = send_otp_email(norm_email, norm_uid, otp_plain)
+    send_ok, send_info, dev_otp = send_otp_email(norm_email, norm_uid, otp_plain)
 
     return {
         "success": True,
@@ -180,7 +180,12 @@ def register_user(
         "masked_email": mask_email(norm_email),
         "cooldown_seconds": 60,
         "expires_in_minutes": 5,
-        "email_delivery": {"success": send_ok, "info": send_info}
+        "email_delivery": {
+            "success": send_ok,
+            "info": send_info,
+            "dev_otp": dev_otp,
+            "smtp_configured": bool(config.SMTP_HOST and config.SMTP_HOST.strip())
+        }
     }
 
 
@@ -344,14 +349,19 @@ def resend_otp(identifier: str) -> Dict[str, Any]:
                 (user_internal_id, otp_hashed, expires_at, cooldown_until)
             )
 
-    send_ok, send_info = send_otp_email(user["email"], user["user_id"], otp_plain)
+    send_ok, send_info, dev_otp = send_otp_email(user["email"], user["user_id"], otp_plain)
 
     return {
         "success": True,
         "message": "A fresh 6-digit verification code has been dispatched.",
         "masked_email": mask_email(user["email"]),
         "cooldown_seconds": 60,
-        "email_delivery": {"success": send_ok, "info": send_info}
+        "email_delivery": {
+            "success": send_ok,
+            "info": send_info,
+            "dev_otp": dev_otp,
+            "smtp_configured": bool(config.SMTP_HOST and config.SMTP_HOST.strip())
+        }
     }
 
 

@@ -20,6 +20,7 @@ export const VerifyOtpPage: React.FC = () => {
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendSuccess, setResendSuccess] = useState<string | null>(null);
+  const [devOtp, setDevOtp] = useState<string | null>(routeState?.devOtp || null);
 
   // 60-second cooldown timer
   const [cooldown, setCooldown] = useState<number>(routeState?.cooldownSeconds || 60);
@@ -137,7 +138,10 @@ export const VerifyOtpPage: React.FC = () => {
     try {
       const res = await resendOtp(identifier);
       if (res.success) {
-        setResendSuccess('A new 6-digit OTP code has been dispatched to your email.');
+        setResendSuccess('A new 6-digit OTP code has been dispatched.');
+        if (res.email_delivery?.dev_otp) {
+          setDevOtp(res.email_delivery.dev_otp);
+        }
         setCooldown(60);
       } else {
         setError(res.error || 'Failed to resend code. Please try again.');
@@ -193,6 +197,19 @@ export const VerifyOtpPage: React.FC = () => {
             <Mail size={16} strokeWidth={2.5} />
             <span className="otp-email-text">{maskedEmail}</span>
           </div>
+
+          {devOtp && (
+            <div className="auth-alert alert-dev-otp">
+              <div className="dev-otp-header">
+                <span className="dev-tag">LOCAL DEV OTP</span>
+                <span className="dev-hint">SMTP not configured in .env</span>
+              </div>
+              <div className="dev-otp-content">
+                <span>Enter this code below:</span>
+                <strong className="dev-code-highlight">{devOtp}</strong>
+              </div>
+            </div>
+          )}
 
           {routeState?.notice && (
             <div className="auth-alert alert-info">

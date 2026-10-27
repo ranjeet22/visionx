@@ -7,7 +7,7 @@ import smtplib
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Tuple
+from typing import Tuple, Optional
 
 from backend import config
 
@@ -19,10 +19,10 @@ def is_smtp_configured() -> bool:
     return bool(config.SMTP_HOST and config.SMTP_HOST.strip())
 
 
-def send_otp_email(to_email: str, user_id: str, otp_code: str) -> Tuple[bool, str]:
+def send_otp_email(to_email: str, user_id: str, otp_code: str) -> Tuple[bool, str, Optional[str]]:
     """
     Sends a 6-digit verification code to the recipient email.
-    Returns (success: bool, message: str).
+    Returns (success: bool, message: str, dev_otp: Optional[str]).
     """
     if not is_smtp_configured():
         msg = (
@@ -32,7 +32,7 @@ def send_otp_email(to_email: str, user_id: str, otp_code: str) -> Tuple[bool, st
         )
         logger.warning(msg)
         print(f"\n======================================================\n{msg}\n======================================================\n")
-        return True, "OTP generated (dev mode logged; configure SMTP in .env for production delivery)."
+        return True, "SMTP server not configured in .env. Running in local dev mode.", otp_code
 
     try:
         subject = f"Your VisionX Verification Code: {otp_code}"
@@ -157,8 +157,8 @@ If you did not request this registration, please safely ignore this email.
         server.quit()
 
         logger.info(f"OTP email sent successfully to {to_email}")
-        return True, "Verification email sent successfully."
+        return True, "Verification email sent successfully.", None
 
     except Exception as e:
         logger.error(f"Failed to send OTP email via SMTP to {to_email}: {e}")
-        return False, f"SMTP delivery failed: {str(e)}"
+        return False, f"SMTP delivery failed: {str(e)}", None
