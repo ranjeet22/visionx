@@ -33,6 +33,8 @@ from backend.knowledge.waste_knowledge import WASTE_KNOWLEDGE_BASE
 from backend.services.detection_pipeline import run_detection_pipeline
 from backend.services.transcription import transcribe_audio_clip
 from backend.agent.strands_agent import execute_agent_chat
+from backend.database import init_db, check_database_health
+from backend.routes.auth import router as auth_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("visionx.server")
@@ -40,18 +42,30 @@ logger = logging.getLogger("visionx.server")
 # Initialize FastAPI App
 app = FastAPI(
     title="VisionX Dual-Model Waste & Person Vision API",
-    description="Live dual-model object detection, Strands conversational agent, and Whistle voice transcription",
+    description="Live dual-model object detection, Strands conversational agent, Whistle voice transcription, and MySQL Auth",
     version="2.0.0"
 )
 
-# Enable CORS for local Vite development and previews
+# Initialize MySQL Database Schema on startup
+@app.on_event("startup")
+def on_startup():
+    try:
+        init_db()
+        logger.info("VisionX database schema initialized.")
+    except Exception as e:
+        logger.warning(f"Database schema init warning (MySQL may be offline): {e}")
+
+# Enable CORS with credentials for local Vite development and previews
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Authentication Router
+app.include_router(auth_router)
 
 
 @app.get("/api/health")
@@ -95,6 +109,7 @@ async def health_check():
                 "status": "ready" if grok_configured else "fallback_active"
             }
         },
+        "database": check_database_health(),
         "default_conf_threshold": 0.18
     }
 

@@ -1,0 +1,38 @@
+.register-card {
+  max-width: 520px;
+}
+
+.label-hint {
+  font-size: 0.78rem;
+  color: var(--grey-text);
+  font-weight: 500;
+}
+
+.password-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  background-color: var(--grey-panel);
+  border: 1.5px solid rgba(11, 11, 11, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: -4px;
+}
+
+.checklist-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #888888;
+  transition: color 0.15s ease;
+}
+
+.checklist-item.item-pass {
+  color: #126320;
+}
+
+.checklist-item svg {
+  flex-shrink: 0;
+}

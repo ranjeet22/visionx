@@ -209,11 +209,59 @@ uv run pytest backend/tests -v
 ```
 
 ### Test Coverage Summary:
+- **`backend/tests/test_auth.py`:** Tests input validation, Argon2id password hashing, OTP generation and verification, duplicate email/user ID enforcement, session persistence, and logout.
+- **`backend/tests/test_auth_endpoints.py`:** Tests FastAPI auth endpoints (`/api/auth/register`, `/api/auth/verify-otp`, `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`) with session cookies.
 - **`backend/tests/test_knowledge.py`:** Tests known waste classes, delimiter/case normalization, person non-waste handling, and cautious unknown class resolution.
 - **`backend/tests/test_detection.py`:** Tests person-only, waste-only, overlapping person & waste, multiple waste deduplication, no objects, and partial model failures.
-- **`backend/tests/test_chat.py`:** Tests selected waste item questions, person detection questions, empty questions, unknown classes, and verified offline fallback.
+- **`backend/tests/test_chat.py`:** Tests selected waste item questions, person detection questions, empty questions, unknown classes, verified offline fallback, and strict domain guardrails (coding refusal).
 - **`backend/tests/test_transcription.py`:** Tests valid audio transcription, empty audio, oversized audio rejection (>10MB), and corrupted audio streams.
-- **`backend/tests/test_api_endpoints.py`:** Tests all 5 FastAPI REST endpoints (`/api/health`, `/api/knowledge-base`, `/api/detect`, `/api/visionx/chat`, `/api/transcribe`).
+- **`backend/tests/test_api_endpoints.py`:** Tests all FastAPI REST endpoints (`/api/health`, `/api/knowledge-base`, `/api/detect`, `/api/visionx/chat`, `/api/transcribe`).
+
+---
+
+## 🗄️ MySQL Database Setup & Authentication
+
+VisionX requires a running MySQL database for persistent user accounts, hashed OTP email verifications, and server-managed session storage.
+
+### ⚠️ Important Notice: Apache vs. MySQL
+**Apache is a web server, not a database server.** Having Apache installed (e.g., via XAMPP or WAMP) does not mean MySQL is running. They are independent services.
+
+### If You Use XAMPP:
+1. Open the **XAMPP Control Panel** (`C:\xampp\xampp-control.exe`).
+2. Next to **MySQL**, click the **Start** button (ensure the module turns green with port `3306`).
+3. *(Alternative CLI)*: You can also start MySQL by running:
+   ```cmd
+   C:\xampp\mysql_start.bat
+   ```
+4. **Automatic Database Provisioning:** The VisionX FastAPI backend automatically initializes the `visionx` database and creates the required tables (`users`, `email_verifications`, `user_sessions`) on startup. You do **not** need to manually run SQL scripts.
+5. To inspect tables in phpMyAdmin, visit: `http://localhost/phpmyadmin` and look for the `visionx` database.
+
+### Dedicated Database User (Optional Production Setup):
+If creating a dedicated user rather than default `root`:
+```sql
+CREATE DATABASE IF NOT EXISTS visionx CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'visionx_user'@'localhost' IDENTIFIED BY 'StrongPasswordHere123!';
+GRANT ALL PRIVILEGES ON visionx.* TO 'visionx_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+Then configure `MYSQL_USER=visionx_user` and `MYSQL_PASSWORD=StrongPasswordHere123!` in `.env`.
+
+---
+
+## 📧 Email OTP Verification & SMTP Configuration
+
+During registration, VisionX issues a 6-digit cryptographically random OTP that expires in 5 minutes with a 60-second resend cooldown:
+
+- **Local Development Mode:** If `SMTP_HOST` in `.env` is left blank, VisionX logs the 6-digit OTP code directly to the backend terminal for seamless testing.
+- **Production SMTP:** To send real emails, configure your SMTP settings in `.env`:
+  ```env
+  SMTP_HOST=smtp.gmail.com
+  SMTP_PORT=587
+  SMTP_USER=your_email@gmail.com
+  SMTP_PASSWORD=your_app_password
+  SMTP_FROM=VisionX <no-reply@visionx.com>
+  SMTP_USE_TLS=true
+  ```
 
 ---
 

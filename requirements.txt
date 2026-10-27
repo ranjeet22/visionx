@@ -13,5 +13,7 @@ python-multipart>=0.0.9
 inference-sdk>=1.8.0
 cactus-needle>=3.2.0
 openai>=1.50.0
+pymysql>=1.1.0
+argon2-cffi>=23.1.0
 pytest>=8.0.0
 pytest-asyncio>=0.23.0

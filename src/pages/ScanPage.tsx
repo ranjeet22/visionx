@@ -9,8 +9,11 @@ import {
   Square,
   RefreshCw,
   AlertCircle,
+  LogOut,
+  User as UserIcon,
 } from 'lucide-react';
 import { useRouter } from '../lib/useRouter';
+import { useAuth } from '../context/useAuth';
 import { useCamera } from '../hooks/useCamera';
 import { YoloDetectionService } from '../features/detection/detection.service';
 import { StrandsAgentService } from '../features/assistant/assistant.service';
@@ -28,6 +31,7 @@ import './ScanPage.css';
 
 export const ScanPage: React.FC = () => {
   const { navigate } = useRouter();
+  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
 
   // Input Mode: 'camera' | 'upload'
   const [inputMode, setInputMode] = useState<ScannerInputMode>('camera');
@@ -57,6 +61,7 @@ export const ScanPage: React.FC = () => {
   const [isAssistantOpen, setIsAssistantOpen] = useState<boolean>(false);
   const [assistantInput, setAssistantInput] = useState<string>('');
   const [assistantLoading, setAssistantLoading] = useState<boolean>(false);
+
   const [chatHistory, setChatHistory] = useState<{
     id: string;
     sender: 'user' | 'assistant';
@@ -89,6 +94,17 @@ export const ScanPage: React.FC = () => {
     toggleFacingMode,
     captureFrame,
   } = useCamera();
+
+  // Authentication Guardrail: Redirect unauthenticated visitors to login
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      if (isCameraActive) stopCamera();
+      navigate('/login', {
+        returnTo: '/scan',
+        notice: 'Please log in or sign up to access the VisionX Scanner workspace.',
+      });
+    }
+  }, [authLoading, isAuthenticated, navigate, isCameraActive, stopCamera]);
 
   // Check Backend Health on Mount
   useEffect(() => {
@@ -459,6 +475,12 @@ export const ScanPage: React.FC = () => {
           </div>
 
           <div className="scan-nav-right">
+            {user && (
+              <span className="scan-user-badge" title={user.email}>
+                <UserIcon size={14} strokeWidth={2.5} />
+                <span>{user.user_id}</span>
+              </span>
+            )}
             {backendHealth.isOnline ? (
               <Badge variant="live" size="sm">
                 DUAL-MODEL VISION LIVE ({backendHealth.device?.toUpperCase() || 'CPU'})
@@ -468,6 +490,20 @@ export const ScanPage: React.FC = () => {
                 LOCAL SERVER READY (START WITH PYTHON)
               </Badge>
             )}
+            <button
+              type="button"
+              className="scan-logout-action-btn"
+              onClick={async () => {
+                if (isCameraActive) stopCamera();
+                await logout();
+                navigate('/');
+              }}
+              title="Log Out of VisionX"
+              aria-label="Log Out"
+            >
+              <LogOut size={16} strokeWidth={2.5} />
+              <span className="logout-btn-label">Logout</span>
+            </button>
           </div>
         </div>
       </header>

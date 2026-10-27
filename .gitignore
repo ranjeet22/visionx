@@ -40,6 +40,10 @@ runs/
 *.webm
 *.ogg
 
+# Database dumps and exports
+*.sql
+*.dump
+
 # Logs
 logs/
 *.log

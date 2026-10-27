@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Menu, X, ArrowUpRight, ScanLine } from 'lucide-react';
+import { Menu, X, ArrowUpRight, ScanLine, LogOut, User as UserIcon } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useRouter } from '../../lib/useRouter';
+import { useAuth } from '../../context/useAuth';
 import './Navbar.css';
 
 export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { navigate } = useRouter();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const navLinks = [
     { label: 'The Problem', href: '#problem' },
@@ -52,16 +54,51 @@ export const Navbar: React.FC = () => {
             ))}
           </ul>
 
-          {/* Right Action */}
+          {/* Right Action: Auth-aware */}
           <div className="nav-actions-desktop">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleOpenScanner}
-              icon={<ArrowUpRight size={16} strokeWidth={2.5} />}
-            >
-              Explore VisionX
-            </Button>
+            {isAuthenticated && user ? (
+              <div className="nav-auth-group">
+                <span className="nav-user-chip" title={user.email}>
+                  <UserIcon size={14} strokeWidth={2.5} />
+                  <span>{user.user_id}</span>
+                </span>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleOpenScanner}
+                  icon={<ArrowUpRight size={16} strokeWidth={2.5} />}
+                >
+                  Scanner
+                </Button>
+                <button
+                  type="button"
+                  className="nav-logout-btn"
+                  onClick={logout}
+                  title="Log out of VisionX"
+                  aria-label="Log out"
+                >
+                  <LogOut size={16} strokeWidth={2.5} />
+                </button>
+              </div>
+            ) : (
+              <div className="nav-auth-group">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate('/login')}
+                >
+                  Log In
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleOpenScanner}
+                  icon={<ArrowUpRight size={16} strokeWidth={2.5} />}
+                >
+                  Launch Scanner
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Mobile Hamburger Toggle Button */}
@@ -90,14 +127,48 @@ export const Navbar: React.FC = () => {
             ))}
           </ul>
           <div className="mobile-cta-wrapper">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={handleOpenScanner}
-              icon={<ArrowUpRight size={18} strokeWidth={2.5} />}
-            >
-              Explore VisionX
-            </Button>
+            {isAuthenticated && user ? (
+              <div className="mobile-auth-controls">
+                <div className="mobile-user-row">
+                  <UserIcon size={16} />
+                  <span>Signed in as <strong>{user.user_id}</strong></span>
+                </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleOpenScanner}
+                  icon={<ArrowUpRight size={18} strokeWidth={2.5} />}
+                >
+                  Open Scanner
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => { setMobileMenuOpen(false); logout(); }}
+                  icon={<LogOut size={16} />}
+                >
+                  Log Out
+                </Button>
+              </div>
+            ) : (
+              <div className="mobile-auth-controls">
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleOpenScanner}
+                  icon={<ArrowUpRight size={18} strokeWidth={2.5} />}
+                >
+                  Launch Scanner
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => { setMobileMenuOpen(false); navigate('/login'); }}
+                >
+                  Log In / Sign Up
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

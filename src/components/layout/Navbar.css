@@ -176,3 +176,61 @@
     border-radius: var(--radius-md);
   }
 }
+
+
+.nav-auth-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--white);
+  border: var(--border-sm);
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+}
+
+.nav-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background-color: var(--white);
+  border: var(--border-sm);
+  border-radius: 8px;
+  color: var(--grey-text);
+  cursor: pointer;
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+  transition: transform 0.1s ease, color 0.1s ease, background-color 0.1s ease;
+}
+
+.nav-logout-btn:hover {
+  background-color: #FFE5EC;
+  color: var(--pink);
+  transform: translate(-1px, -1px);
+}
+
+.mobile-auth-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  padding: 4px 0;
+  color: var(--ink);
+}

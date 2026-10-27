@@ -2,10 +2,12 @@ import { createContext } from 'react';
 
 export interface RouterContextType {
   currentPath: string;
-  navigate: (to: string) => void;
+  routeState?: any;
+  navigate: (to: string, state?: any) => void;
 }
 
 export const RouterContext = createContext<RouterContextType>({
   currentPath: '/',
+  routeState: null,
   navigate: () => {},
 });

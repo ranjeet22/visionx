@@ -737,3 +737,49 @@
 .markdown-link:hover {
   opacity: 0.8;
 }
+
+
+/* Scanner Header Auth Badges & Controls */
+.scan-user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--white);
+  border: var(--border-sm);
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+}
+
+.scan-logout-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--white);
+  border: var(--border-sm);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--grey-text);
+  cursor: pointer;
+  box-shadow: 1.5px 1.5px 0 var(--ink);
+  transition: transform 0.1s ease, background-color 0.1s ease, color 0.1s ease;
+}
+
+.scan-logout-action-btn:hover {
+  background-color: #FFE5EC;
+  color: var(--pink);
+  transform: translate(-1px, -1px);
+}
+
+@media (max-width: 600px) {
+  .logout-btn-label {
+    display: none;
+  }
+}

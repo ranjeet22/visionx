@@ -1,0 +1,125 @@
+.otp-card {
+  max-width: 490px;
+}
+
+.otp-email-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--sky);
+  border: var(--border-sm);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 20px;
+}
+
+.alert-info {
+  background-color: #EBF3FD;
+  border: 2px solid #3B82F6;
+  color: #1D4ED8;
+  box-shadow: 3px 3px 0 #3B82F6;
+}
+
+.otp-digits-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.otp-digit-box {
+  width: 52px;
+  height: 60px;
+  text-align: center;
+  font-family: var(--font-chunky);
+  font-size: 1.6rem;
+  color: var(--ink);
+  background-color: var(--paper);
+  border: var(--border-thick);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  outline: none;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease;
+}
+
+.otp-digit-box:focus {
+  background-color: var(--white);
+  box-shadow: var(--shadow-hover);
+  transform: translate(-2px, -2px);
+  border-color: var(--ink);
+}
+
+.otp-digit-box.digit-filled {
+  background-color: #FEF3C7;
+}
+
+.otp-expiry-hint {
+  font-size: 0.8rem;
+  color: var(--grey-text);
+  text-align: center;
+  margin: 6px 0 16px 0;
+}
+
+.otp-resend-section {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.resend-otp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--paper);
+  border: var(--border-sm);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.resend-otp-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.resend-otp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 460px) {
+  .otp-digit-box {
+    width: 42px;
+    height: 52px;
+    font-size: 1.35rem;
+  }
+  .otp-digits-row {
+    gap: 6px;
+  }
+}
