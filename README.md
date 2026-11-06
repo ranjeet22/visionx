@@ -278,6 +278,26 @@ During registration, VisionX issues a 6-digit cryptographically random OTP that 
 
 ---
 
+## 🌐 Deploying to Render
+
+VisionX includes a preconfigured [`render.yaml`](file:///c:/Users/lenovo/Downloads/VisionX%20Updated/render.yaml) blueprint that automatically provisions both the **FastAPI Backend Web Service** and the **Vite React Frontend Static Site**.
+
+### One-Click Blueprint Setup:
+1. Log in to your [Render Dashboard](https://dashboard.render.com).
+2. Click **New +** > **Blueprint**.
+3. Connect your repository: `https://github.com/ranjeet22/visionx`.
+4. Render will read `render.yaml` and configure two services:
+   - **`visionx-api`**: Python Web Service running Uvicorn on `0.0.0.0:$PORT`.
+   - **`visionx`**: Static Site hosting the React frontend, automatically connected to `visionx-api` via `VITE_API_URL`.
+5. Provide the required production environment variables in the Render prompt:
+   - `GROK_API`: Your Groq/Grok API key.
+   - `ROBOFLOW_API_KEY`: Your Roboflow API key.
+   - `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`: Connection parameters to your production MySQL instance (e.g. Aiven, Clever Cloud, Railway, PlanetScale, or a managed MySQL database).
+   - *(Optional)* `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`: For email OTP delivery.
+6. Click **Apply**. Render will automatically build both services and deploy them with free SSL.
+
+---
+
 ## 📄 License
 
 MIT License. Developed for intelligent environmental stewardship and municipal contamination prevention.

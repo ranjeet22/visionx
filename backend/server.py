@@ -55,10 +55,12 @@ def on_startup():
     except Exception as e:
         logger.warning(f"Database schema init warning (MySQL may be offline): {e}")
 
-# Enable CORS with credentials for local Vite development and previews
+# Enable CORS with credentials for local Vite development, Render, and Vercel deployments
+allowed_origins = [config.FRONTEND_ORIGIN] if config.FRONTEND_ORIGIN else []
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.onrender\.com|.*\.vercel\.app)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -160,6 +162,7 @@ async def detect_objects(
 
 
 @app.post("/api/visionx/chat")
+@app.post("/api/chat")
 async def visionx_chat(req: ChatRequest):
     """
     Strands Agents post-detection conversational endpoint.
