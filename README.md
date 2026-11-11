@@ -3,7 +3,7 @@
 > Dual-Model Vision Pipeline & AI Environmental Assistant
 
 VisionX is an enterprise-grade computer vision and conversational AI platform designed to eliminate municipal recycling contamination. It features a real-time **dual-model vision pipeline** (Ultralytics Person Detection + Roboflow Pretrained Waste Detection), an **object-aware Strands conversational agent**, and local on-device **speech-to-text transcription powered by Cactus Compute Whistle**.
-
+ 
 ---
 
 ## 🏗️ System Architecture
